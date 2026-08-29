@@ -8,12 +8,12 @@
     "build": "vite",
     "preview": "vite"
   },
-  "dependencies": {"firebase"
+  "dependencies": {
     "@vitejs/plugin-react": "latest",
     "vite": "latest",
     "react": "latest",
-    "react-dom": "latest"
+    "react-dom": "latest",
+    "firebase": "latest"
   },
   "devDependencies": {}
 }
-
