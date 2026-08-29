@@ -8,7 +8,7 @@
     "build": "vite",
     "preview": "vite"
   },
-  "dependencies": {
+  "dependencies": {"firebase"
     "@vitejs/plugin-react": "latest",
     "vite": "latest",
     "react": "latest",
@@ -16,4 +16,4 @@
   },
   "devDependencies": {}
 }
-"firebase"
+
