@@ -28,7 +28,38 @@ a {
   margin: auto;
 }
 
-/* NAVBAR */
+/* =========================
+   LOGO
+========================= */
+
+.logo {
+  display: flex;
+  align-items: center;
+}
+
+.logo-diamond {
+  width: auto;
+  height: auto;
+  border: none;
+  transform: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0;
+}
+
+.logo-diamond span {
+  transform: none;
+  color: #1499d5;
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: -1px;
+  white-space: nowrap;
+}
+
+/* =========================
+   NAVBAR
+========================= */
 
 .navbar {
   background: white;
@@ -45,35 +76,6 @@ a {
   justify-content: space-between;
   gap: 25px;
 }
-
-/* DIAMOND LOGO */
-
-.logo {
-  display: flex;
-  align-items: center;
-}
-
-.logo-diamond {
-  width: 150px;
-  height: 48px;
-  border: 2px solid #9bdcf7;
-  transform: rotate(45deg);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 5px;
-}
-
-.logo-diamond span {
-  transform: rotate(-45deg);
-  color: #1499d5;
-  font-size: 18px;
-  font-weight: 900;
-  letter-spacing: -0.8px;
-  white-space: nowrap;
-}
-
-/* NAVIGATION */
 
 .nav-links {
   display: flex;
@@ -114,12 +116,18 @@ a {
   opacity: 0.9;
 }
 
-/* HERO */
+/* =========================
+   HERO
+========================= */
 
 .hero {
   padding: 80px 0;
   background:
-    radial-gradient(circle at 90% 20%, #dff5ff 0, transparent 35%),
+    radial-gradient(
+      circle at 90% 20%,
+      #dff5ff 0,
+      transparent 35%
+    ),
     #f7fbff;
 }
 
@@ -171,13 +179,16 @@ a {
   font-weight: 700;
 }
 
-/* APPLICATION CARD */
+/* =========================
+   APPLICATION CARD
+========================= */
 
 .hero-card {
   background: white;
   border-radius: 22px;
   padding: 28px;
-  box-shadow: 0 20px 60px rgba(31, 110, 150, 0.12);
+  box-shadow:
+    0 20px 60px rgba(31, 110, 150, 0.12);
   border: 1px solid #e7f2f7;
 }
 
@@ -222,7 +233,9 @@ a {
   margin-top: 8px;
 }
 
-/* UNIVERSITIES */
+/* =========================
+   UNIVERSITIES
+========================= */
 
 .universities {
   padding: 85px 0;
@@ -265,7 +278,8 @@ a {
 
 .university-card:hover {
   transform: translateY(-4px);
-  box-shadow: 0 15px 40px rgba(20, 153, 213, 0.1);
+  box-shadow:
+    0 15px 40px rgba(20, 153, 213, 0.1);
 }
 
 .university-image {
@@ -316,7 +330,14 @@ a {
   font-weight: 700;
 }
 
-/* HOW IT WORKS */
+.apply-button:hover {
+  background: #1499d5;
+  color: white;
+}
+
+/* =========================
+   HOW IT WORKS
+========================= */
 
 .how-it-works {
   padding: 85px 0;
@@ -363,7 +384,9 @@ a {
   font-size: 14px;
 }
 
-/* CTA */
+/* =========================
+   CTA
+========================= */
 
 .cta {
   padding: 60px 0;
@@ -394,7 +417,9 @@ a {
   color: #1499d5;
 }
 
-/* FOOTER */
+/* =========================
+   FOOTER
+========================= */
 
 footer {
   background: white;
@@ -413,7 +438,9 @@ footer {
   font-size: 13px;
 }
 
-/* LOGIN */
+/* =========================
+   LOGIN
+========================= */
 
 .login-overlay {
   position: fixed;
@@ -432,7 +459,8 @@ footer {
   border-radius: 22px;
   padding: 35px;
   position: relative;
-  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.2);
+  box-shadow:
+    0 25px 80px rgba(0, 0, 0, 0.2);
 }
 
 .login-close {
@@ -533,7 +561,9 @@ footer {
   font-weight: 800;
 }
 
-/* MOBILE */
+/* =========================
+   MOBILE
+========================= */
 
 @media (max-width: 850px) {
   .hero-content {
@@ -570,12 +600,11 @@ footer {
     align-items: flex-start;
   }
 
-  .logo-diamond {
-    width: 125px;
-    height: 42px;
+  .logo-diamond span {
+    font-size: 20px;
   }
 
-  .logo-diamond span {
-    font-size: 15px;
+  .login-modal {
+    padding: 28px 22px;
   }
-    }
+  }
