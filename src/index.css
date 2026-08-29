@@ -10,8 +10,13 @@ body {
   color: #123047;
 }
 
-button {
+button,
+input {
   font-family: inherit;
+}
+
+button {
+  cursor: pointer;
 }
 
 a {
@@ -41,26 +46,57 @@ a {
   gap: 25px;
 }
 
+/* DIAMOND LOGO */
+
 .logo {
-  font-size: 27px;
-  font-weight: 900;
-  color: #1499d5;
-  letter-spacing: -1px;
+  display: flex;
+  align-items: center;
 }
+
+.logo-diamond {
+  width: 150px;
+  height: 48px;
+  border: 2px solid #9bdcf7;
+  transform: rotate(45deg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+}
+
+.logo-diamond span {
+  transform: rotate(-45deg);
+  color: #1499d5;
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: -0.8px;
+  white-space: nowrap;
+}
+
+/* NAVIGATION */
 
 .nav-links {
   display: flex;
+  align-items: center;
   gap: 25px;
 }
 
-.nav-links a {
+.nav-links a,
+.nav-login {
   color: #456173;
   font-size: 14px;
   font-weight: 600;
 }
 
-.nav-links a:hover {
+.nav-links a:hover,
+.nav-login:hover {
   color: #1499d5;
+}
+
+.nav-login {
+  border: none;
+  background: transparent;
+  padding: 0;
 }
 
 .nav-button,
@@ -71,7 +107,6 @@ a {
   padding: 13px 21px;
   border-radius: 10px;
   font-weight: 700;
-  cursor: pointer;
 }
 
 .nav-button:hover,
@@ -134,7 +169,6 @@ a {
   padding: 13px 21px;
   border-radius: 10px;
   font-weight: 700;
-  cursor: pointer;
 }
 
 /* APPLICATION CARD */
@@ -213,7 +247,6 @@ a {
   background: transparent;
   color: #1499d5;
   font-weight: 700;
-  cursor: pointer;
 }
 
 .university-grid {
@@ -280,7 +313,6 @@ a {
   color: #1499d5;
   padding: 11px;
   border-radius: 9px;
-  cursor: pointer;
   font-weight: 700;
 }
 
@@ -381,6 +413,126 @@ footer {
   font-size: 13px;
 }
 
+/* LOGIN */
+
+.login-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 40, 55, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 999;
+}
+
+.login-modal {
+  width: min(430px, 100%);
+  background: white;
+  border-radius: 22px;
+  padding: 35px;
+  position: relative;
+  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.2);
+}
+
+.login-close {
+  position: absolute;
+  top: 15px;
+  right: 18px;
+  border: none;
+  background: transparent;
+  font-size: 28px;
+  color: #718591;
+}
+
+.login-logo {
+  display: flex;
+  justify-content: center;
+  margin: 12px 0 35px;
+}
+
+.login-modal h2 {
+  text-align: center;
+  font-size: 28px;
+}
+
+.login-subtitle {
+  text-align: center;
+  color: #7b8d98;
+  font-size: 14px;
+  margin: 9px 0 25px;
+}
+
+.login-modal form {
+  display: flex;
+  flex-direction: column;
+}
+
+.login-modal label {
+  color: #405866;
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 7px;
+}
+
+.login-modal input {
+  width: 100%;
+  border: 1px solid #dceaf1;
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 17px;
+  outline: none;
+  font-size: 14px;
+}
+
+.login-modal input:focus {
+  border-color: #1499d5;
+}
+
+.login-submit {
+  width: 100%;
+  margin-top: 4px;
+}
+
+.login-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.forgot-password {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: #1499d5;
+  margin-top: 17px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.login-message {
+  margin-top: 18px;
+  padding: 12px;
+  background: #effaff;
+  border-radius: 9px;
+  color: #147fae;
+  font-size: 13px;
+  text-align: center;
+}
+
+.login-switch {
+  text-align: center;
+  color: #7b8d98;
+  font-size: 13px;
+  margin-top: 22px;
+}
+
+.login-switch button {
+  border: none;
+  background: transparent;
+  color: #1499d5;
+  font-weight: 800;
+}
+
 /* MOBILE */
 
 @media (max-width: 850px) {
@@ -417,4 +569,13 @@ footer {
     flex-direction: column;
     align-items: flex-start;
   }
-                               }
+
+  .logo-diamond {
+    width: 125px;
+    height: 42px;
+  }
+
+  .logo-diamond span {
+    font-size: 15px;
+  }
+    }
