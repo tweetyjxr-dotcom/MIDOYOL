@@ -42,19 +42,17 @@ const universities = [
 
 function App() {
   const [user, setUser] = useState(null);
-
   const [showAuth, setShowAuth] = useState(false);
   const [isRegister, setIsRegister] = useState(false);
+  const [showPortal, setShowPortal] = useState(false);
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [country, setCountry] = useState("");
-
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-
   const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   const [loading, setLoading] = useState(false);
@@ -63,6 +61,10 @@ function App() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
+
+      if (currentUser) {
+        setShowPortal(true);
+      }
     });
 
     return () => unsubscribe();
@@ -96,6 +98,10 @@ function App() {
     setPassword("");
     setConfirmPassword("");
     setAcceptedTerms(false);
+  };
+
+  const enterPortal = () => {
+    setShowPortal(true);
   };
 
   const handleRegister = async (e) => {
@@ -166,7 +172,8 @@ function App() {
 
       setTimeout(() => {
         setShowAuth(false);
-      }, 1200);
+        setShowPortal(true);
+      }, 1000);
 
     } catch (error) {
       console.error(error);
@@ -182,9 +189,7 @@ function App() {
           "Account created, but student information could not be saved."
         );
       } else {
-        setMessage(
-          "Something went wrong. Please try again."
-        );
+        setMessage("Something went wrong. Please try again.");
       }
     } finally {
       setLoading(false);
@@ -213,6 +218,7 @@ function App() {
 
       setTimeout(() => {
         setShowAuth(false);
+        setShowPortal(true);
       }, 700);
 
     } catch (error) {
@@ -227,9 +233,7 @@ function App() {
       } else if (error.code === "auth/invalid-email") {
         setMessage("Please enter a valid email.");
       } else {
-        setMessage(
-          "Something went wrong. Please try again."
-        );
+        setMessage("Something went wrong. Please try again.");
       }
     } finally {
       setLoading(false);
@@ -246,10 +250,7 @@ function App() {
       setLoading(true);
       setMessage("");
 
-      await sendPasswordResetEmail(
-        auth,
-        email.trim()
-      );
+      await sendPasswordResetEmail(auth, email.trim());
 
       setMessage(
         "Password reset email sent. Check your inbox."
@@ -257,15 +258,11 @@ function App() {
 
     } catch (error) {
       if (error.code === "auth/user-not-found") {
-        setMessage(
-          "No account was found with this email."
-        );
+        setMessage("No account was found with this email.");
       } else if (error.code === "auth/invalid-email") {
         setMessage("Please enter a valid email.");
       } else {
-        setMessage(
-          "Unable to send reset email."
-        );
+        setMessage("Unable to send reset email.");
       }
     } finally {
       setLoading(false);
@@ -275,6 +272,7 @@ function App() {
   const handleLogout = async () => {
     try {
       await signOut(auth);
+      setShowPortal(false);
     } catch (error) {
       console.error(error);
     }
@@ -291,25 +289,152 @@ function App() {
     );
   };
 
+  /* =========================
+     LANDING PAGE
+  ========================== */
+
+  if (!showPortal) {
+    return (
+      <div className="landing-page">
+
+        <div className="landing-logo-box">
+          <div className="landing-logo">
+            MIDOYOL
+          </div>
+        </div>
+
+        <div className="landing-content">
+
+          <div className="landing-left">
+
+            <div className="landing-small-title">
+              UNIVERSITY ADMISSION PLATFORM
+            </div>
+
+            <h1>
+              Your Journey to
+              <br />
+              <span>University</span>
+              <br />
+              Starts Here.
+            </h1>
+
+            <p>
+              Discover universities, choose your major,
+              and start your university application
+              through MIDOYOL.
+            </p>
+
+            <div className="landing-fee">
+              Start your application for just
+              <strong>$1</strong>
+            </div>
+
+            <div className="landing-buttons">
+
+              <button
+                className="landing-auth-button"
+                onClick={openLogin}
+              >
+                LOG IN
+              </button>
+
+              <button
+                className="landing-auth-button"
+                onClick={openRegister}
+              >
+                SIGN UP
+              </button>
+
+            </div>
+
+            <div className="landing-note">
+              Simple. Easy. Built for students worldwide.
+            </div>
+
+          </div>
+
+          <div className="globe-area">
+
+            <div className="globe-glow"></div>
+
+            <div className="globe">
+
+              <div className="globe-land land-one"></div>
+              <div className="globe-land land-two"></div>
+              <div className="globe-land land-three"></div>
+
+              <div className="globe-line line-one"></div>
+              <div className="globe-line line-two"></div>
+              <div className="globe-line line-three"></div>
+
+            </div>
+
+            <div className="flag flag-turkey">🇹🇷</div>
+            <div className="flag flag-sudan">🇸🇩</div>
+            <div className="flag flag-uk">🇬🇧</div>
+            <div className="flag flag-germany">🇩🇪</div>
+            <div className="flag flag-brazil">🇧🇷</div>
+            <div className="flag flag-saudi">🇸🇦</div>
+
+            <div className="globe-label">
+              STUDENTS AROUND THE WORLD
+            </div>
+
+          </div>
+
+        </div>
+
+        {showAuth && (
+          <AuthModal
+            isRegister={isRegister}
+            setIsRegister={setIsRegister}
+            closeAuth={closeAuth}
+            loading={loading}
+            message={message}
+            firstName={firstName}
+            setFirstName={setFirstName}
+            lastName={lastName}
+            setLastName={setLastName}
+            email={email}
+            setEmail={setEmail}
+            dateOfBirth={dateOfBirth}
+            setDateOfBirth={setDateOfBirth}
+            country={country}
+            setCountry={setCountry}
+            password={password}
+            setPassword={setPassword}
+            confirmPassword={confirmPassword}
+            setConfirmPassword={setConfirmPassword}
+            acceptedTerms={acceptedTerms}
+            setAcceptedTerms={setAcceptedTerms}
+            handleRegister={handleRegister}
+            handleLogin={handleLogin}
+            handleResetPassword={handleResetPassword}
+          />
+        )}
+
+      </div>
+    );
+  }
+
+  /* =========================
+     STUDENT PORTAL
+  ========================== */
+
   return (
     <div className="app">
-
-      {/* NAVBAR */}
 
       <nav className="navbar">
         <div className="container nav-content">
 
           <div className="logo">
-            <span className="logo-diamond">
-              <span>MIDOYOL</span>
-            </span>
+            MIDOYOL
           </div>
 
           <div className="nav-links">
 
-            <a href="#home">
-              Home
-            </a>
+            <a href="#home">Home</a>
 
             <a href="#universities">
               Universities
@@ -319,21 +444,12 @@ function App() {
               How It Works
             </a>
 
-            {!user ? (
-              <button
-                className="nav-login"
-                onClick={openLogin}
-              >
-                Login
-              </button>
-            ) : (
-              <button
-                className="nav-login"
-                onClick={handleLogout}
-              >
-                Logout
-              </button>
-            )}
+            <button
+              className="nav-login"
+              onClick={handleLogout}
+            >
+              Logout
+            </button>
 
           </div>
 
@@ -346,8 +462,6 @@ function App() {
 
         </div>
       </nav>
-
-      {/* HERO */}
 
       <section
         className="hero"
@@ -412,23 +526,13 @@ function App() {
             </h3>
 
             <div className="select-box">
-              <span>
-                Study Level
-              </span>
-
-              <strong>
-                Choose level
-              </strong>
+              <span>Study Level</span>
+              <strong>Choose level</strong>
             </div>
 
             <div className="select-box">
-              <span>
-                Major
-              </span>
-
-              <strong>
-                Choose your major
-              </strong>
+              <span>Major</span>
+              <strong>Choose your major</strong>
             </div>
 
             <button
@@ -448,8 +552,6 @@ function App() {
 
         </div>
       </section>
-
-      {/* UNIVERSITIES */}
 
       <section
         className="universities"
@@ -488,59 +590,52 @@ function App() {
 
           <div className="university-grid">
 
-            {universities.map(
-              (university) => (
+            {universities.map((university) => (
 
-                <div
-                  className="university-card"
-                  key={university.name}
-                >
+              <div
+                className="university-card"
+                key={university.name}
+              >
 
-                  <div className="university-image">
-                    🎓
+                <div className="university-image">
+                  🎓
+                </div>
+
+                <div className="university-info">
+
+                  <span className="location">
+                    📍 {university.location}
+                  </span>
+
+                  <h3>
+                    {university.name}
+                  </h3>
+
+                  <p>
+                    {university.programs}
+                  </p>
+
+                  <div className="scholarship">
+                    🎁 {university.scholarship}
                   </div>
 
-                  <div className="university-info">
-
-                    <span className="location">
-                      📍 {university.location}
-                    </span>
-
-                    <h3>
-                      {university.name}
-                    </h3>
-
-                    <p>
-                      {university.programs}
-                    </p>
-
-                    <div className="scholarship">
-                      🎁{" "}
-                      {university.scholarship}
-                    </div>
-
-                    <button
-                      className="apply-button"
-                      onClick={
-                        handleApplication
-                      }
-                    >
-                      View University →
-                    </button>
-
-                  </div>
+                  <button
+                    className="apply-button"
+                    onClick={handleApplication}
+                  >
+                    View University →
+                  </button>
 
                 </div>
 
-              )
-            )}
+              </div>
+
+            ))}
 
           </div>
 
         </div>
       </section>
-
-      {/* HOW IT WORKS */}
 
       <section
         className="how-it-works"
@@ -572,9 +667,7 @@ function App() {
                 01
               </div>
 
-              <h3>
-                Choose
-              </h3>
+              <h3>Choose</h3>
 
               <p>
                 Find the university and
@@ -589,9 +682,7 @@ function App() {
                 02
               </div>
 
-              <h3>
-                Apply
-              </h3>
+              <h3>Apply</h3>
 
               <p>
                 Submit your information
@@ -606,9 +697,7 @@ function App() {
                 03
               </div>
 
-              <h3>
-                Track
-              </h3>
+              <h3>Track</h3>
 
               <p>
                 Follow your application
@@ -622,17 +711,13 @@ function App() {
         </div>
       </section>
 
-      {/* CTA */}
-
       <section className="cta">
 
         <div className="container cta-content">
 
           <div>
 
-            <span>
-              READY TO START?
-            </span>
+            <span>READY TO START?</span>
 
             <h2>
               Start Your University Journey.
@@ -651,8 +736,6 @@ function App() {
 
       </section>
 
-      {/* FOOTER */}
-
       <footer>
 
         <div className="container footer-content">
@@ -660,274 +743,258 @@ function App() {
           <div>
 
             <div className="logo">
-              <span className="logo-diamond">
-                <span>MIDOYOL</span>
-              </span>
+              MIDOYOL
             </div>
 
             <p>
-              Your journey to university
-              starts here.
+              Your journey to university starts here.
             </p>
 
           </div>
 
           <p>
-            © 2026 MIDOYOL.
-            All rights reserved.
+            © 2026 MIDOYOL. All rights reserved.
           </p>
 
         </div>
 
       </footer>
 
-      {/* AUTH MODAL */}
+    </div>
+  );
+}
 
-      {showAuth && (
 
-        <div className="login-overlay">
+/* =========================
+   AUTH MODAL
+========================= */
 
-          <div className="login-modal">
+function AuthModal({
+  isRegister,
+  setIsRegister,
+  closeAuth,
+  loading,
+  message,
+  firstName,
+  setFirstName,
+  lastName,
+  setLastName,
+  email,
+  setEmail,
+  dateOfBirth,
+  setDateOfBirth,
+  country,
+  setCountry,
+  password,
+  setPassword,
+  confirmPassword,
+  setConfirmPassword,
+  acceptedTerms,
+  setAcceptedTerms,
+  handleRegister,
+  handleLogin,
+  handleResetPassword,
+}) {
+  return (
+    <div className="login-overlay">
 
-            <button
-              className="login-close"
-              onClick={closeAuth}
-              disabled={loading}
-            >
-              ×
-            </button>
+      <div className="login-modal">
 
-            <div className="login-logo">
+        <button
+          className="login-close"
+          onClick={closeAuth}
+          disabled={loading}
+        >
+          ×
+        </button>
 
-              <span className="logo-diamond">
-                <span>MIDOYOL</span>
-              </span>
+        <div className="login-logo">
+          MIDOYOL
+        </div>
 
-            </div>
+        <h2>
+          {isRegister
+            ? "Create Your Account"
+            : "Welcome Back"}
+        </h2>
 
-            <h2>
-              {isRegister
-                ? "Create Your Account"
-                : "Welcome Back"}
-            </h2>
+        <p className="login-subtitle">
+          {isRegister
+            ? "Create your student account."
+            : "Login to continue your application."}
+        </p>
 
-            <p className="login-subtitle">
+        <form
+          onSubmit={
+            isRegister
+              ? handleRegister
+              : handleLogin
+          }
+        >
 
-              {isRegister
-                ? "Create your student account."
-                : "Login to continue your application."}
-
-            </p>
-
-            <form
-              onSubmit={
-                isRegister
-                  ? handleRegister
-                  : handleLogin
-              }
-            >
-
-              {isRegister && (
-                <>
-                  <label>
-                    First Name
-                  </label>
-
-                  <input
-                    type="text"
-                    placeholder="Enter your first name"
-                    value={firstName}
-                    onChange={(e) =>
-                      setFirstName(
-                        e.target.value
-                      )
-                    }
-                    autoComplete="given-name"
-                  />
-
-                  <label>
-                    Last Name
-                  </label>
-
-                  <input
-                    type="text"
-                    placeholder="Enter your last name"
-                    value={lastName}
-                    onChange={(e) =>
-                      setLastName(
-                        e.target.value
-                      )
-                    }
-                    autoComplete="family-name"
-                  />
-                </>
-              )}
-
-              <label>
-                Email
-              </label>
+          {isRegister && (
+            <>
+              <label>First Name</label>
 
               <input
-                type="email"
-                placeholder="Enter your email"
-                value={email}
+                type="text"
+                placeholder="Enter your first name"
+                value={firstName}
                 onChange={(e) =>
-                  setEmail(e.target.value)
+                  setFirstName(e.target.value)
                 }
-                autoComplete="email"
+                autoComplete="given-name"
               />
 
-              {isRegister && (
-                <>
-                  <label>
-                    Date of Birth
-                  </label>
+              <label>Last Name</label>
 
-                  <input
-                    type="date"
-                    value={dateOfBirth}
-                    onChange={(e) =>
-                      setDateOfBirth(
-                        e.target.value
-                      )
-                    }
-                  />
+              <input
+                type="text"
+                placeholder="Enter your last name"
+                value={lastName}
+                onChange={(e) =>
+                  setLastName(e.target.value)
+                }
+                autoComplete="family-name"
+              />
+            </>
+          )}
 
-                  <label>
-                    Country
-                  </label>
+          <label>Email</label>
 
-                  <input
-                    type="text"
-                    placeholder="Enter your country"
-                    value={country}
-                    onChange={(e) =>
-                      setCountry(
-                        e.target.value
-                      )
-                    }
-                    autoComplete="country-name"
-                  />
-                </>
-              )}
+          <input
+            type="email"
+            placeholder="Enter your email"
+            value={email}
+            onChange={(e) =>
+              setEmail(e.target.value)
+            }
+            autoComplete="email"
+          />
 
-              <label>
-                Password
-              </label>
+          {isRegister && (
+            <>
+              <label>Date of Birth</label>
+
+              <input
+                type="date"
+                value={dateOfBirth}
+                onChange={(e) =>
+                  setDateOfBirth(e.target.value)
+                }
+              />
+
+              <label>Country</label>
+
+              <input
+                type="text"
+                placeholder="Enter your country"
+                value={country}
+                onChange={(e) =>
+                  setCountry(e.target.value)
+                }
+                autoComplete="country-name"
+              />
+            </>
+          )}
+
+          <label>Password</label>
+
+          <input
+            type="password"
+            placeholder="Enter your password"
+            value={password}
+            onChange={(e) =>
+              setPassword(e.target.value)
+            }
+            autoComplete={
+              isRegister
+                ? "new-password"
+                : "current-password"
+            }
+          />
+
+          {isRegister && (
+            <>
+              <label>Confirm Password</label>
 
               <input
                 type="password"
-                placeholder="Enter your password"
-                value={password}
+                placeholder="Confirm your password"
+                value={confirmPassword}
                 onChange={(e) =>
-                  setPassword(
-                    e.target.value
-                  )
+                  setConfirmPassword(e.target.value)
                 }
-                autoComplete={
-                  isRegister
-                    ? "new-password"
-                    : "current-password"
-                }
+                autoComplete="new-password"
               />
 
-              {isRegister && (
-                <>
-                  <label>
-                    Confirm Password
-                  </label>
+              <label className="terms-label">
 
-                  <input
-                    type="password"
-                    placeholder="Confirm your password"
-                    value={confirmPassword}
-                    onChange={(e) =>
-                      setConfirmPassword(
-                        e.target.value
-                      )
-                    }
-                    autoComplete="new-password"
-                  />
+                <input
+                  type="checkbox"
+                  checked={acceptedTerms}
+                  onChange={(e) =>
+                    setAcceptedTerms(e.target.checked)
+                  }
+                />
 
-                  <label className="terms-label">
+                <span>
+                  I agree to the Terms & Privacy Policy.
+                </span>
 
-                    <input
-                      type="checkbox"
-                      checked={acceptedTerms}
-                      onChange={(e) =>
-                        setAcceptedTerms(
-                          e.target.checked
-                        )
-                      }
-                    />
+              </label>
+            </>
+          )}
 
-                    <span>
-                      I agree to the Terms &
-                      Privacy Policy.
-                    </span>
+          <button
+            type="submit"
+            className="primary-button login-submit"
+            disabled={loading}
+          >
+            {loading
+              ? "Please wait..."
+              : isRegister
+              ? "Create Account"
+              : "Login"}
+          </button>
 
-                  </label>
-                </>
-              )}
+        </form>
 
-              <button
-                type="submit"
-                className="primary-button login-submit"
-                disabled={loading}
-              >
-                {loading
-                  ? "Please wait..."
-                  : isRegister
-                  ? "Create Account"
-                  : "Login"}
-              </button>
+        {!isRegister && (
+          <button
+            className="forgot-password"
+            onClick={handleResetPassword}
+            disabled={loading}
+          >
+            Forgot Password?
+          </button>
+        )}
 
-            </form>
-
-            {!isRegister && (
-              <button
-                className="forgot-password"
-                onClick={
-                  handleResetPassword
-                }
-                disabled={loading}
-              >
-                Forgot Password?
-              </button>
-            )}
-
-            {message && (
-              <div className="login-message">
-                {message}
-              </div>
-            )}
-
-            <div className="login-switch">
-
-              {isRegister
-                ? "Already have an account?"
-                : "Don't have an account?"}
-
-              <button
-                onClick={() => {
-                  setIsRegister(
-                    !isRegister
-                  );
-                  setMessage("");
-                }}
-              >
-                {isRegister
-                  ? " Login"
-                  : " Create Account"}
-              </button>
-
-            </div>
-
+        {message && (
+          <div className="login-message">
+            {message}
           </div>
+        )}
+
+        <div className="login-switch">
+
+          {isRegister
+            ? "Already have an account?"
+            : "Don't have an account?"}
+
+          <button
+            onClick={() => {
+              setIsRegister(!isRegister);
+            }}
+          >
+            {isRegister
+              ? " Login"
+              : " Create Account"}
+          </button>
 
         </div>
 
-      )}
+      </div>
 
     </div>
   );
