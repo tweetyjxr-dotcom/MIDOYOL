@@ -11,75 +11,18 @@ import {
   updateProfile,
 } from "firebase/auth";
 
-import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+import {
+  doc,
+  setDoc,
+  serverTimestamp,
+} from "firebase/firestore";
 
 import { auth, db } from "./firebase";
 
+
 /* =========================
-   DATA
+   UNIVERSITIES
 ========================= */
-
-const fields = {
-  "Medicine & Health": [
-    "Medicine",
-    "Dentistry",
-    "Pharmacy",
-    "Nursing",
-    "Physiotherapy",
-  ],
-
-  "Engineering": [
-    "Civil Engineering",
-    "Mechanical Engineering",
-    "Electrical & Electronics Engineering",
-    "Industrial Engineering",
-    "Architecture",
-  ],
-
-  "Computer Science & Technology": [
-    "Computer Science",
-    "Software Engineering",
-    "Computer Engineering",
-    "Information Technology",
-    "Artificial Intelligence",
-    "Cyber Security",
-  ],
-
-  "Business & Economics": [
-    "Business Administration",
-    "International Business",
-    "Economics",
-    "Finance",
-    "Accounting",
-    "Marketing",
-  ],
-
-  "Law": [
-    "Law",
-    "International Law",
-    "Commercial Law",
-  ],
-
-  "Social Sciences": [
-    "Political Science & International Relations",
-    "Psychology",
-    "Sociology",
-    "Media & Communication",
-  ],
-
-  "Design & Arts": [
-    "Graphic Design",
-    "Interior Design",
-    "Industrial Design",
-    "Visual Communication Design",
-  ],
-
-  "Education": [
-    "English Language Teaching",
-    "Primary Education",
-    "Special Education",
-  ],
-};
 
 const universities = [
   {
@@ -102,82 +45,152 @@ const universities = [
   },
 ];
 
+
+/* =========================
+   STUDY FIELDS
+========================= */
+
+const studyFields = {
+  "Medicine & Health": [
+    "Medicine",
+    "Dentistry",
+    "Pharmacy",
+    "Nursing",
+    "Physiotherapy",
+    "Nutrition & Dietetics",
+  ],
+
+  "Engineering": [
+    "Civil Engineering",
+    "Mechanical Engineering",
+    "Electrical & Electronics Engineering",
+    "Industrial Engineering",
+    "Architecture",
+  ],
+
+  "Computer Science & IT": [
+    "Computer Engineering",
+    "Software Engineering",
+    "Artificial Intelligence",
+    "Information Technology",
+    "Cyber Security",
+  ],
+
+  "Business & Economics": [
+    "Business Administration",
+    "International Business",
+    "Economics",
+    "Finance",
+    "Accounting",
+    "Marketing",
+  ],
+
+  "Law & Social Sciences": [
+    "Law",
+    "International Relations",
+    "Political Science",
+    "Psychology",
+    "Sociology",
+  ],
+};
+
+
 /* =========================
    APP
 ========================= */
 
 function App() {
-  const [user, setUser] = useState(null);
 
-  const [page, setPage] = useState("home");
+  const [user, setUser] = useState(null);
 
   const [showAuth, setShowAuth] = useState(false);
   const [isRegister, setIsRegister] = useState(false);
 
+  const [showPortal, setShowPortal] = useState(false);
+
   const [selectedField, setSelectedField] = useState("");
   const [selectedMajor, setSelectedMajor] = useState("");
+
+  const [showFields, setShowFields] = useState(false);
+  const [showMajors, setShowMajors] = useState(false);
+
+  /* AUTH FORM */
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [country, setCountry] = useState("");
+
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+
   const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
+
 
   /* =========================
      AUTH STATE
   ========================== */
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
 
-      if (currentUser) {
-        setPage("student");
-      } else {
-        setPage("home");
+    const unsubscribe = onAuthStateChanged(
+      auth,
+      (currentUser) => {
+
+        setUser(currentUser);
+
+        if (currentUser) {
+          setShowPortal(true);
+        }
+
       }
-    });
+    );
 
     return () => unsubscribe();
+
   }, []);
 
+
   /* =========================
-     AUTH MODAL
+     AUTH OPEN / CLOSE
   ========================== */
 
   const openLogin = () => {
+
     setIsRegister(false);
     setMessage("");
     setShowAuth(true);
+
   };
 
+
   const openRegister = () => {
+
     setIsRegister(true);
     setMessage("");
     setShowAuth(true);
+
   };
+
 
   const closeAuth = () => {
+
     if (!loading) {
+
       setShowAuth(false);
       setMessage("");
+
     }
+
   };
 
-  const switchAuth = () => {
-    if (!loading) {
-      setIsRegister(!isRegister);
-      setMessage("");
-    }
-  };
 
   const clearForm = () => {
+
     setFirstName("");
     setLastName("");
     setEmail("");
@@ -186,13 +199,16 @@ function App() {
     setPassword("");
     setConfirmPassword("");
     setAcceptedTerms(false);
+
   };
+
 
   /* =========================
      REGISTER
   ========================== */
 
   const handleRegister = async (e) => {
+
     e.preventDefault();
 
     if (
@@ -204,28 +220,50 @@ function App() {
       !password ||
       !confirmPassword
     ) {
-      setMessage("Please complete all required fields.");
+
+      setMessage(
+        "Please complete all required fields."
+      );
+
       return;
     }
+
 
     if (password.length < 6) {
-      setMessage("Password must be at least 6 characters.");
+
+      setMessage(
+        "Password must be at least 6 characters."
+      );
+
       return;
     }
+
 
     if (password !== confirmPassword) {
-      setMessage("Passwords do not match.");
+
+      setMessage(
+        "Passwords do not match."
+      );
+
       return;
     }
+
 
     if (!acceptedTerms) {
-      setMessage("Please accept the Terms & Privacy Policy.");
+
+      setMessage(
+        "Please accept the Terms & Privacy Policy."
+      );
+
       return;
     }
 
+
     try {
+
       setLoading(true);
       setMessage("");
+
 
       const userCredential =
         await createUserWithEmailAndPassword(
@@ -234,71 +272,142 @@ function App() {
           password
         );
 
-      const newUser = userCredential.user;
+
+      const newUser =
+        userCredential.user;
+
 
       const fullName =
         `${firstName.trim()} ${lastName.trim()}`;
 
-      await updateProfile(newUser, {
-        displayName: fullName,
-      });
 
-      await setDoc(doc(db, "students", newUser.uid), {
-        uid: newUser.uid,
-        firstName: firstName.trim(),
-        lastName: lastName.trim(),
-        fullName,
-        email: email.trim().toLowerCase(),
-        dateOfBirth,
-        country,
-        createdAt: serverTimestamp(),
-      });
+      await updateProfile(
+        newUser,
+        {
+          displayName: fullName,
+        }
+      );
 
-      setMessage("Account created successfully.");
+
+      await setDoc(
+        doc(
+          db,
+          "students",
+          newUser.uid
+        ),
+        {
+          uid: newUser.uid,
+          firstName: firstName.trim(),
+          lastName: lastName.trim(),
+          fullName,
+          email:
+            email.trim().toLowerCase(),
+          dateOfBirth,
+          country,
+          createdAt:
+            serverTimestamp(),
+        }
+      );
+
+
+      setMessage(
+        "Account created successfully."
+      );
+
 
       clearForm();
 
+
       setTimeout(() => {
+
         setShowAuth(false);
-        setPage("student");
-      }, 900);
+        setShowPortal(true);
+
+      }, 1000);
+
 
     } catch (error) {
+
       console.error(error);
 
-      if (error.code === "auth/email-already-in-use") {
-        setMessage("This email is already registered.");
-      } else if (error.code === "auth/invalid-email") {
-        setMessage("Please enter a valid email.");
-      } else if (error.code === "auth/weak-password") {
-        setMessage("Password must be at least 6 characters.");
-      } else if (error.code === "permission-denied") {
+
+      if (
+        error.code ===
+        "auth/email-already-in-use"
+      ) {
+
+        setMessage(
+          "This email is already registered."
+        );
+
+      } else if (
+        error.code ===
+        "auth/invalid-email"
+      ) {
+
+        setMessage(
+          "Please enter a valid email."
+        );
+
+      } else if (
+        error.code ===
+        "auth/weak-password"
+      ) {
+
+        setMessage(
+          "Password must be at least 6 characters."
+        );
+
+      } else if (
+        error.code ===
+        "permission-denied"
+      ) {
+
         setMessage(
           "Account created, but student information could not be saved."
         );
+
       } else {
-        setMessage("Something went wrong. Please try again.");
+
+        setMessage(
+          "Something went wrong. Please try again."
+        );
+
       }
+
     } finally {
+
       setLoading(false);
+
     }
+
   };
+
 
   /* =========================
      LOGIN
   ========================== */
 
   const handleLogin = async (e) => {
+
     e.preventDefault();
 
+
     if (!email || !password) {
-      setMessage("Please enter your email and password.");
+
+      setMessage(
+        "Please enter your email and password."
+      );
+
       return;
     }
 
+
     try {
+
       setLoading(true);
       setMessage("");
+
 
       await signInWithEmailAndPassword(
         auth,
@@ -306,133 +415,235 @@ function App() {
         password
       );
 
-      setMessage("Login successful.");
+
+      setMessage(
+        "Login successful."
+      );
+
 
       setTimeout(() => {
+
         setShowAuth(false);
-        setPage("student");
+        setShowPortal(true);
+
       }, 700);
 
+
     } catch (error) {
+
       console.error(error);
 
+
       if (
-        error.code === "auth/invalid-credential" ||
-        error.code === "auth/wrong-password" ||
-        error.code === "auth/user-not-found"
+        error.code ===
+          "auth/invalid-credential" ||
+        error.code ===
+          "auth/wrong-password" ||
+        error.code ===
+          "auth/user-not-found"
       ) {
-        setMessage("Email or password is incorrect.");
-      } else if (error.code === "auth/invalid-email") {
-        setMessage("Please enter a valid email.");
+
+        setMessage(
+          "Email or password is incorrect."
+        );
+
+      } else if (
+        error.code ===
+        "auth/invalid-email"
+      ) {
+
+        setMessage(
+          "Please enter a valid email."
+        );
+
       } else {
-        setMessage("Something went wrong. Please try again.");
+
+        setMessage(
+          "Something went wrong. Please try again."
+        );
+
       }
+
     } finally {
+
       setLoading(false);
+
     }
+
   };
+
 
   /* =========================
      RESET PASSWORD
   ========================== */
 
   const handleResetPassword = async () => {
+
     if (!email) {
-      setMessage("Enter your email first.");
+
+      setMessage(
+        "Enter your email first."
+      );
+
       return;
     }
 
+
     try {
+
       setLoading(true);
       setMessage("");
 
-      await sendPasswordResetEmail(auth, email.trim());
+
+      await sendPasswordResetEmail(
+        auth,
+        email.trim()
+      );
+
 
       setMessage(
         "Password reset email sent. Check your inbox."
       );
 
-    } catch (error) {
-      console.error(error);
 
-      if (error.code === "auth/user-not-found") {
-        setMessage("No account was found with this email.");
-      } else if (error.code === "auth/invalid-email") {
-        setMessage("Please enter a valid email.");
+    } catch (error) {
+
+      if (
+        error.code ===
+        "auth/user-not-found"
+      ) {
+
+        setMessage(
+          "No account was found with this email."
+        );
+
+      } else if (
+        error.code ===
+        "auth/invalid-email"
+      ) {
+
+        setMessage(
+          "Please enter a valid email."
+        );
+
       } else {
-        setMessage("Unable to send reset email.");
+
+        setMessage(
+          "Unable to send reset email."
+        );
+
       }
+
     } finally {
+
       setLoading(false);
+
     }
+
   };
+
 
   /* =========================
      LOGOUT
   ========================== */
 
   const handleLogout = async () => {
+
     try {
+
       await signOut(auth);
+
+      setShowPortal(false);
 
       setSelectedField("");
       setSelectedMajor("");
-      setPage("home");
+      setShowFields(false);
+      setShowMajors(false);
 
     } catch (error) {
+
       console.error(error);
+
     }
+
   };
+
 
   /* =========================
-     FIELD CHANGE
+     SELECT FIELD
   ========================== */
 
-  const handleFieldChange = (e) => {
-    setSelectedField(e.target.value);
+  const chooseField = (field) => {
+
+    setSelectedField(field);
+
     setSelectedMajor("");
+
+    setShowFields(false);
+
+    setShowMajors(true);
+
   };
+
+
+  /* =========================
+     SELECT MAJOR
+  ========================== */
+
+  const chooseMajor = (major) => {
+
+    setSelectedMajor(major);
+
+    setShowMajors(false);
+
+  };
+
 
   /* =========================
      APPLICATION
   ========================== */
 
   const handleApplication = () => {
+
     if (!user) {
+
       openLogin();
-      return;
-    }
-
-    if (!selectedField || !selectedMajor) {
-      document
-        .getElementById("study-selection")
-        ?.scrollIntoView({
-          behavior: "smooth",
-        });
 
       return;
+
     }
 
-    alert(
-      `Application selected:\n${selectedField}\n${selectedMajor}`
-    );
+
+    setShowPortal(true);
+
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
+
   };
 
+
   /* =========================
-     HOME PAGE
+     LANDING PAGE
   ========================== */
 
-  if (page === "home") {
+  if (!showPortal) {
+
     return (
+
       <div className="landing-page">
 
         <div className="landing-logo-box">
+
           <div className="landing-logo">
             MIDOYOL
           </div>
+
         </div>
 
-        <main className="landing-content">
+
+        <div className="landing-content">
 
           <div className="landing-left">
 
@@ -440,24 +651,40 @@ function App() {
               UNIVERSITY ADMISSION PLATFORM
             </div>
 
+
             <h1>
+
               Your Journey to
               <br />
+
               <span>University</span>
               <br />
+
               Starts Here.
+
             </h1>
 
+
             <p>
-              Discover universities, choose your major,
-              and start your university application
-              through MIDOYOL.
+
+              Discover universities, choose
+              your major, and start your
+              university application through
+              MIDOYOL.
+
             </p>
 
+
             <div className="landing-fee">
+
               Start your application for just
-              <strong>$1</strong>
+
+              <strong>
+                $1
+              </strong>
+
             </div>
+
 
             <div className="landing-buttons">
 
@@ -465,8 +692,9 @@ function App() {
                 className="landing-auth-button"
                 onClick={openLogin}
               >
-                LOGIN
+                LOG IN
               </button>
+
 
               <button
                 className="landing-auth-button"
@@ -477,49 +705,88 @@ function App() {
 
             </div>
 
+
             <div className="landing-note">
-              Simple. Easy. Built for students worldwide.
+
+              Simple. Easy. Built for
+              students worldwide.
+
             </div>
 
           </div>
+
 
           <div className="globe-area">
 
             <div className="globe-glow"></div>
 
+
             <div className="globe">
 
               <div className="globe-land land-one"></div>
+
               <div className="globe-land land-two"></div>
+
               <div className="globe-land land-three"></div>
 
+
               <div className="globe-line line-one"></div>
+
               <div className="globe-line line-two"></div>
+
               <div className="globe-line line-three"></div>
 
             </div>
 
-            <div className="flag flag-turkey">🇹🇷</div>
-            <div className="flag flag-sudan">🇸🇩</div>
-            <div className="flag flag-uk">🇬🇧</div>
-            <div className="flag flag-germany">🇩🇪</div>
-            <div className="flag flag-brazil">🇧🇷</div>
-            <div className="flag flag-saudi">🇸🇦</div>
+
+            <div className="flag flag-turkey">
+              🇹🇷
+            </div>
+
+            <div className="flag flag-sudan">
+              🇸🇩
+            </div>
+
+            <div className="flag flag-uk">
+              🇬🇧
+            </div>
+
+            <div className="flag flag-germany">
+              🇩🇪
+            </div>
+
+            <div className="flag flag-brazil">
+              🇧🇷
+            </div>
+
+            <div className="flag flag-saudi">
+              🇸🇦
+            </div>
+
 
             <div className="globe-label">
+
               STUDENTS AROUND THE WORLD
+
             </div>
 
           </div>
 
-        </main>
+        </div>
+
 
         {showAuth && (
+
           <AuthModal
+
             isRegister={isRegister}
-            switchAuth={switchAuth}
+
+            setIsRegister={setIsRegister}
+
             closeAuth={closeAuth}
+
             loading={loading}
+
             message={message}
 
             firstName={firstName}
@@ -549,36 +816,54 @@ function App() {
             handleRegister={handleRegister}
             handleLogin={handleLogin}
             handleResetPassword={handleResetPassword}
+
           />
+
         )}
 
       </div>
+
     );
+
   }
 
+
   /* =========================
-     STUDENT PAGE
+     STUDENT PORTAL
   ========================== */
 
   return (
-    <div className="student-page">
 
-      <nav className="student-navbar">
+    <div className="app">
 
-        <div className="container student-nav-content">
+
+      {/* NAVBAR */}
+
+      <nav className="navbar">
+
+        <div className="container nav-content">
 
           <div className="logo">
             MIDOYOL
           </div>
 
-          <div className="student-nav-right">
 
-            <span className="student-name">
-              {user?.displayName || "Student"}
-            </span>
+          <div className="nav-links">
+
+            <a href="#home">
+              Home
+            </a>
+
+            <a href="#universities">
+              Universities
+            </a>
+
+            <a href="#study">
+              Study
+            </a>
 
             <button
-              className="logout-button"
+              className="nav-login"
               onClick={handleLogout}
             >
               Logout
@@ -586,132 +871,305 @@ function App() {
 
           </div>
 
+
+          <button
+            className="nav-button"
+            onClick={handleApplication}
+          >
+            Start Application
+          </button>
+
         </div>
 
       </nav>
 
-      <main className="student-main">
 
-        <div className="student-welcome">
+      {/* WELCOME */}
 
-          <span className="small-title">
-            STUDENT PORTAL
-          </span>
+      <section
+        className="student-welcome"
+        id="home"
+      >
 
-          <h1>
-            Welcome to MIDOYOL
-          </h1>
+        <div className="container">
 
-          <p>
-            Choose your field and major to explore
-            available universities.
-          </p>
+          <div className="welcome-content">
 
-        </div>
+            <div>
 
-        <section
-          className="study-selection"
-          id="study-selection"
-        >
+              <span className="hero-label">
+                STUDENT PORTAL
+              </span>
 
-          <div className="selection-card">
+              <h1>
+                Welcome to
+                <span> MIDOYOL</span>
+              </h1>
 
-            <div className="selection-number">
-              01
-            </div>
-
-            <div className="selection-content">
-
-              <label>
-                Choose Your Field
-              </label>
-
-              <select
-                value={selectedField}
-                onChange={handleFieldChange}
-              >
-
-                <option value="">
-                  Select Field
-                </option>
-
-                {Object.keys(fields).map((field) => (
-                  <option
-                    value={field}
-                    key={field}
-                  >
-                    {field}
-                  </option>
-                ))}
-
-              </select>
+              <p>
+                Choose your field and
+                specialization to begin
+                your university journey.
+              </p>
 
             </div>
 
           </div>
 
-          {selectedField && (
-            <div className="selection-card">
+        </div>
 
-              <div className="selection-number">
-                02
+      </section>
+
+
+      {/* STUDY CARD */}
+
+      <section
+        className="study-section"
+        id="study"
+      >
+
+        <div className="container">
+
+          <div className="study-card">
+
+            <div className="study-card-icon">
+              🎓
+            </div>
+
+
+            <div className="study-card-title">
+              CHOOSE YOUR STUDY PATH
+            </div>
+
+
+            <h2>
+              Find Your Field
+            </h2>
+
+
+            <p className="study-description">
+              Select a field first, then
+              choose the specialization
+              you want to study.
+            </p>
+
+
+            {/* FIELD */}
+
+            <div className="study-step">
+
+              <div className="study-step-number">
+                01
               </div>
 
-              <div className="selection-content">
+
+              <div className="study-step-content">
 
                 <label>
-                  Choose Your Major
+                  Study Field
                 </label>
 
-                <select
-                  value={selectedMajor}
-                  onChange={(e) =>
-                    setSelectedMajor(e.target.value)
+
+                <button
+                  className="study-select-button"
+                  onClick={() =>
+                    setShowFields(!showFields)
                   }
                 >
 
-                  <option value="">
-                    Select Major
-                  </option>
+                  <span>
+                    {selectedField ||
+                      "Choose Your Field"}
+                  </span>
 
-                  {fields[selectedField].map((major) => (
-                    <option
-                      value={major}
-                      key={major}
-                    >
-                      {major}
-                    </option>
-                  ))}
+                  <span className="arrow">
+                    {showFields
+                      ? "⌃"
+                      : "⌄"}
+                  </span>
 
-                </select>
+                </button>
+
+
+                {showFields && (
+
+                  <div className="options-box">
+
+                    {Object.keys(
+                      studyFields
+                    ).map((field) => (
+
+                      <button
+                        key={field}
+                        className="option-button"
+                        onClick={() =>
+                          chooseField(field)
+                        }
+                      >
+                        {field}
+                      </button>
+
+                    ))}
+
+                  </div>
+
+                )}
 
               </div>
 
             </div>
-          )}
 
-        </section>
 
-        {selectedMajor && (
-          <section className="universities-section">
+            {/* MAJOR */}
 
-            <div className="portal-section-title">
+            <div
+              className={`study-step ${
+                !selectedField
+                  ? "disabled-step"
+                  : ""
+              }`}
+            >
 
-              <div>
-                <span className="small-title">
-                  AVAILABLE UNIVERSITIES
-                </span>
+              <div className="study-step-number">
+                02
+              </div>
 
-                <h2>
-                  {selectedMajor}
-                </h2>
+
+              <div className="study-step-content">
+
+                <label>
+                  Specialization
+                </label>
+
+
+                <button
+                  className="study-select-button"
+                  disabled={!selectedField}
+                  onClick={() =>
+                    setShowMajors(!showMajors)
+                  }
+                >
+
+                  <span>
+
+                    {selectedMajor ||
+                      (
+                        selectedField
+                          ? "Choose Your Specialization"
+                          : "Choose a field first"
+                      )}
+
+                  </span>
+
+
+                  <span className="arrow">
+
+                    {showMajors
+                      ? "⌃"
+                      : "⌄"}
+
+                  </span>
+
+                </button>
+
+
+                {showMajors &&
+                  selectedField && (
+
+                    <div className="options-box">
+
+                      {studyFields[
+                        selectedField
+                      ].map((major) => (
+
+                        <button
+                          key={major}
+                          className="option-button"
+                          onClick={() =>
+                            chooseMajor(major)
+                          }
+                        >
+                          {major}
+                        </button>
+
+                      ))}
+
+                    </div>
+
+                  )}
+
               </div>
 
             </div>
 
-            <div className="university-grid">
 
-              {universities.map((university) => (
+            {/* CONTINUE */}
+
+            <button
+              className="continue-button"
+              disabled={!selectedMajor}
+              onClick={() => {
+
+                alert(
+                  `You selected ${selectedMajor}. The application process will start soon.`
+                );
+
+              }}
+            >
+
+              Continue
+
+              <span>
+                →
+              </span>
+
+            </button>
+
+
+            <div className="study-card-footer">
+
+              Secure student application
+              • MIDOYOL
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </section>
+
+
+      {/* UNIVERSITIES */}
+
+      <section
+        className="universities"
+        id="universities"
+      >
+
+        <div className="container">
+
+          <div className="section-heading">
+
+            <div>
+
+              <span className="small-title">
+                OUR UNIVERSITIES
+              </span>
+
+              <h2>
+                Choose Your University
+              </h2>
+
+            </div>
+
+          </div>
+
+
+          <div className="university-grid">
+
+            {universities.map(
+              (university) => (
 
                 <div
                   className="university-card"
@@ -722,45 +1180,175 @@ function App() {
                     🎓
                   </div>
 
+
                   <div className="university-info">
 
                     <span className="location">
                       📍 {university.location}
                     </span>
 
+
                     <h3>
                       {university.name}
                     </h3>
+
 
                     <p>
                       {university.programs}
                     </p>
 
+
                     <div className="scholarship">
                       🎁 {university.scholarship}
                     </div>
 
+
                     <button
                       className="apply-button"
-                      onClick={handleApplication}
+                      onClick={
+                        handleApplication
+                      }
                     >
-                      Start Application →
+                      View University →
                     </button>
 
                   </div>
 
                 </div>
 
-              ))}
+              )
+            )}
+
+          </div>
+
+        </div>
+
+      </section>
+
+
+      {/* HOW IT WORKS */}
+
+      <section
+        className="how-it-works"
+        id="how-it-works"
+      >
+
+        <div className="container">
+
+          <div className="section-center">
+
+            <span className="small-title">
+              SIMPLE PROCESS
+            </span>
+
+            <h2>
+              How MIDOYOL Works
+            </h2>
+
+            <p>
+              Choose. Apply. Track.
+            </p>
+
+          </div>
+
+
+          <div className="steps">
+
+            <div className="step">
+
+              <div className="step-number">
+                01
+              </div>
+
+              <h3>
+                Choose
+              </h3>
+
+              <p>
+                Find the field and
+                specialization that
+                fits you.
+              </p>
 
             </div>
 
-          </section>
-        )}
 
-      </main>
+            <div className="step">
 
-      <footer className="student-footer">
+              <div className="step-number">
+                02
+              </div>
+
+              <h3>
+                Apply
+              </h3>
+
+              <p>
+                Submit your information
+                and required documents.
+              </p>
+
+            </div>
+
+
+            <div className="step">
+
+              <div className="step-number">
+                03
+              </div>
+
+              <h3>
+                Track
+              </h3>
+
+              <p>
+                Follow your application
+                status.
+              </p>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </section>
+
+
+      {/* CTA */}
+
+      <section className="cta">
+
+        <div className="container cta-content">
+
+          <div>
+
+            <span>
+              READY TO START?
+            </span>
+
+            <h2>
+              Start Your University Journey.
+            </h2>
+
+          </div>
+
+
+          <button
+            className="primary-button"
+            onClick={handleApplication}
+          >
+            Start Application →
+          </button>
+
+        </div>
+
+      </section>
+
+
+      {/* FOOTER */}
+
+      <footer>
 
         <div className="container footer-content">
 
@@ -771,13 +1359,16 @@ function App() {
             </div>
 
             <p>
-              Your journey to university starts here.
+              Your journey to university
+              starts here.
             </p>
 
           </div>
 
+
           <p>
-            © 2026 MIDOYOL. All rights reserved.
+            © 2026 MIDOYOL.
+            All rights reserved.
           </p>
 
         </div>
@@ -785,8 +1376,10 @@ function App() {
       </footer>
 
     </div>
+
   );
 }
+
 
 /* =========================
    AUTH MODAL
@@ -794,7 +1387,7 @@ function App() {
 
 function AuthModal({
   isRegister,
-  switchAuth,
+  setIsRegister,
   closeAuth,
   loading,
   message,
@@ -827,7 +1420,9 @@ function AuthModal({
   handleLogin,
   handleResetPassword,
 }) {
+
   return (
+
     <div className="login-overlay">
 
       <div className="login-modal">
@@ -840,21 +1435,29 @@ function AuthModal({
           ×
         </button>
 
+
         <div className="login-logo">
           MIDOYOL
         </div>
 
+
         <h2>
+
           {isRegister
             ? "Create Your Account"
             : "Welcome Back"}
+
         </h2>
 
+
         <p className="login-subtitle">
+
           {isRegister
             ? "Create your student account."
             : "Login to continue your application."}
+
         </p>
+
 
         <form
           onSubmit={
@@ -864,80 +1467,114 @@ function AuthModal({
           }
         >
 
+
           {isRegister && (
             <>
-              <label>First Name</label>
+
+              <label>
+                First Name
+              </label>
 
               <input
                 type="text"
                 placeholder="Enter your first name"
                 value={firstName}
                 onChange={(e) =>
-                  setFirstName(e.target.value)
+                  setFirstName(
+                    e.target.value
+                  )
                 }
                 autoComplete="given-name"
               />
 
-              <label>Last Name</label>
+
+              <label>
+                Last Name
+              </label>
 
               <input
                 type="text"
                 placeholder="Enter your last name"
                 value={lastName}
                 onChange={(e) =>
-                  setLastName(e.target.value)
+                  setLastName(
+                    e.target.value
+                  )
                 }
                 autoComplete="family-name"
               />
+
             </>
           )}
 
-          <label>Email</label>
+
+          <label>
+            Email
+          </label>
 
           <input
             type="email"
             placeholder="Enter your email"
             value={email}
             onChange={(e) =>
-              setEmail(e.target.value)
+              setEmail(
+                e.target.value
+              )
             }
             autoComplete="email"
           />
 
+
           {isRegister && (
             <>
-              <label>Date of Birth</label>
+
+              <label>
+                Date of Birth
+              </label>
 
               <input
                 type="date"
                 value={dateOfBirth}
                 onChange={(e) =>
-                  setDateOfBirth(e.target.value)
+                  setDateOfBirth(
+                    e.target.value
+                  )
                 }
               />
 
-              <label>Country</label>
+
+              <label>
+                Country
+              </label>
 
               <input
                 type="text"
                 placeholder="Enter your country"
                 value={country}
                 onChange={(e) =>
-                  setCountry(e.target.value)
+                  setCountry(
+                    e.target.value
+                  )
                 }
                 autoComplete="country-name"
               />
+
             </>
           )}
 
-          <label>Password</label>
+
+          <label>
+            Password
+          </label>
 
           <input
             type="password"
             placeholder="Enter your password"
             value={password}
             onChange={(e) =>
-              setPassword(e.target.value)
+              setPassword(
+                e.target.value
+              )
             }
             autoComplete={
               isRegister
@@ -946,19 +1583,26 @@ function AuthModal({
             }
           />
 
+
           {isRegister && (
             <>
-              <label>Confirm Password</label>
+
+              <label>
+                Confirm Password
+              </label>
 
               <input
                 type="password"
                 placeholder="Confirm your password"
                 value={confirmPassword}
                 onChange={(e) =>
-                  setConfirmPassword(e.target.value)
+                  setConfirmPassword(
+                    e.target.value
+                  )
                 }
                 autoComplete="new-password"
               />
+
 
               <label className="terms-label">
 
@@ -966,47 +1610,63 @@ function AuthModal({
                   type="checkbox"
                   checked={acceptedTerms}
                   onChange={(e) =>
-                    setAcceptedTerms(e.target.checked)
+                    setAcceptedTerms(
+                      e.target.checked
+                    )
                   }
                 />
 
                 <span>
-                  I agree to the Terms & Privacy Policy.
+                  I agree to the Terms &
+                  Privacy Policy.
                 </span>
 
               </label>
+
             </>
           )}
+
 
           <button
             type="submit"
             className="primary-button login-submit"
             disabled={loading}
           >
+
             {loading
               ? "Please wait..."
               : isRegister
               ? "Create Account"
               : "Login"}
+
           </button>
 
         </form>
 
+
         {!isRegister && (
+
           <button
             className="forgot-password"
-            onClick={handleResetPassword}
+            onClick={
+              handleResetPassword
+            }
             disabled={loading}
           >
             Forgot Password?
           </button>
+
         )}
 
+
         {message && (
+
           <div className="login-message">
             {message}
           </div>
+
         )}
+
 
         <div className="login-switch">
 
@@ -1014,13 +1674,21 @@ function AuthModal({
             ? "Already have an account?"
             : "Don't have an account?"}
 
+
           <button
-            onClick={switchAuth}
-            disabled={loading}
+            onClick={() => {
+
+              setIsRegister(
+                !isRegister
+              );
+
+            }}
           >
+
             {isRegister
               ? " Login"
               : " Create Account"}
+
           </button>
 
         </div>
@@ -1028,17 +1696,20 @@ function AuthModal({
       </div>
 
     </div>
+
   );
+
 }
 
-/* =========================
-   RENDER
-========================= */
 
 ReactDOM.createRoot(
   document.getElementById("root")
 ).render(
+
   <React.StrictMode>
+
     <App />
+
   </React.StrictMode>
+
 );
