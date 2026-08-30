@@ -8,9 +8,16 @@ import {
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut,
+  updateProfile,
 } from "firebase/auth";
 
-import { auth } from "./firebase";
+import {
+  doc,
+  setDoc,
+  serverTimestamp,
+} from "firebase/firestore";
+
+import { auth, db } from "./firebase";
 
 const universities = [
   {
@@ -35,11 +42,20 @@ const universities = [
 
 function App() {
   const [user, setUser] = useState(null);
-  const [showLogin, setShowLogin] = useState(false);
+
+  const [showAuth, setShowAuth] = useState(false);
   const [isRegister, setIsRegister] = useState(false);
 
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
+  const [dateOfBirth, setDateOfBirth] = useState("");
+  const [country, setCountry] = useState("");
+
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
@@ -53,24 +69,48 @@ function App() {
   }, []);
 
   const openLogin = () => {
+    setIsRegister(false);
     setMessage("");
-    setEmail("");
-    setPassword("");
-    setShowLogin(true);
+    setShowAuth(true);
   };
 
-  const closeLogin = () => {
+  const openRegister = () => {
+    setIsRegister(true);
+    setMessage("");
+    setShowAuth(true);
+  };
+
+  const closeAuth = () => {
     if (!loading) {
-      setShowLogin(false);
+      setShowAuth(false);
       setMessage("");
     }
   };
 
-  const handleAuth = async (e) => {
+  const clearForm = () => {
+    setFirstName("");
+    setLastName("");
+    setEmail("");
+    setDateOfBirth("");
+    setCountry("");
+    setPassword("");
+    setConfirmPassword("");
+    setAcceptedTerms(false);
+  };
+
+  const handleRegister = async (e) => {
     e.preventDefault();
 
-    if (!email || !password) {
-      setMessage("Please enter your email and password.");
+    if (
+      !firstName ||
+      !lastName ||
+      !email ||
+      !dateOfBirth ||
+      !country ||
+      !password ||
+      !confirmPassword
+    ) {
+      setMessage("Please complete all required fields.");
       return;
     }
 
@@ -79,38 +119,117 @@ function App() {
       return;
     }
 
+    if (password !== confirmPassword) {
+      setMessage("Passwords do not match.");
+      return;
+    }
+
+    if (!acceptedTerms) {
+      setMessage("Please accept the Terms & Privacy Policy.");
+      return;
+    }
+
     try {
       setLoading(true);
       setMessage("");
 
-      if (isRegister) {
+      const userCredential =
         await createUserWithEmailAndPassword(
           auth,
-          email,
+          email.trim(),
           password
         );
 
-        setMessage("Account created successfully.");
-      } else {
-        await signInWithEmailAndPassword(
-          auth,
-          email,
-          password
-        );
+      const newUser = userCredential.user;
 
-        setMessage("Login successful.");
-      }
+      const fullName =
+        `${firstName.trim()} ${lastName.trim()}`;
+
+      await updateProfile(newUser, {
+        displayName: fullName,
+      });
+
+      await setDoc(doc(db, "students", newUser.uid), {
+        uid: newUser.uid,
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        fullName,
+        email: email.trim().toLowerCase(),
+        dateOfBirth,
+        country,
+        createdAt: serverTimestamp(),
+      });
+
+      setMessage("Account created successfully.");
+
+      clearForm();
+
+      setTimeout(() => {
+        setShowAuth(false);
+      }, 1200);
+
     } catch (error) {
+      console.error(error);
+
       if (error.code === "auth/email-already-in-use") {
         setMessage("This email is already registered.");
-      } else if (error.code === "auth/invalid-credential") {
-        setMessage("Email or password is incorrect.");
       } else if (error.code === "auth/invalid-email") {
         setMessage("Please enter a valid email.");
       } else if (error.code === "auth/weak-password") {
         setMessage("Password must be at least 6 characters.");
+      } else if (error.code === "permission-denied") {
+        setMessage(
+          "Account created, but student information could not be saved."
+        );
       } else {
-        setMessage("Something went wrong. Please try again.");
+        setMessage(
+          "Something went wrong. Please try again."
+        );
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+
+    if (!email || !password) {
+      setMessage("Please enter your email and password.");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setMessage("");
+
+      await signInWithEmailAndPassword(
+        auth,
+        email.trim(),
+        password
+      );
+
+      setMessage("Login successful.");
+
+      setTimeout(() => {
+        setShowAuth(false);
+      }, 700);
+
+    } catch (error) {
+      console.error(error);
+
+      if (
+        error.code === "auth/invalid-credential" ||
+        error.code === "auth/wrong-password" ||
+        error.code === "auth/user-not-found"
+      ) {
+        setMessage("Email or password is incorrect.");
+      } else if (error.code === "auth/invalid-email") {
+        setMessage("Please enter a valid email.");
+      } else {
+        setMessage(
+          "Something went wrong. Please try again."
+        );
       }
     } finally {
       setLoading(false);
@@ -124,21 +243,41 @@ function App() {
     }
 
     try {
-      await sendPasswordResetEmail(auth, email);
-      setMessage("Password reset email sent. Check your inbox.");
+      setLoading(true);
+      setMessage("");
+
+      await sendPasswordResetEmail(
+        auth,
+        email.trim()
+      );
+
+      setMessage(
+        "Password reset email sent. Check your inbox."
+      );
+
     } catch (error) {
       if (error.code === "auth/user-not-found") {
-        setMessage("No account was found with this email.");
+        setMessage(
+          "No account was found with this email."
+        );
       } else if (error.code === "auth/invalid-email") {
         setMessage("Please enter a valid email.");
       } else {
-        setMessage("Unable to send reset email.");
+        setMessage(
+          "Unable to send reset email."
+        );
       }
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleLogout = async () => {
-    await signOut(auth);
+    try {
+      await signOut(auth);
+    } catch (error) {
+      console.error(error);
+    }
   };
 
   const handleApplication = () => {
@@ -147,13 +286,16 @@ function App() {
       return;
     }
 
-    alert("Application system coming next.");
+    alert(
+      "Your application system will be available soon."
+    );
   };
 
   return (
     <div className="app">
 
       {/* NAVBAR */}
+
       <nav className="navbar">
         <div className="container nav-content">
 
@@ -164,9 +306,18 @@ function App() {
           </div>
 
           <div className="nav-links">
-            <a href="#home">Home</a>
-            <a href="#universities">Universities</a>
-            <a href="#how-it-works">How It Works</a>
+
+            <a href="#home">
+              Home
+            </a>
+
+            <a href="#universities">
+              Universities
+            </a>
+
+            <a href="#how-it-works">
+              How It Works
+            </a>
 
             {!user ? (
               <button
@@ -183,6 +334,7 @@ function App() {
                 Logout
               </button>
             )}
+
           </div>
 
           <button
@@ -196,7 +348,11 @@ function App() {
       </nav>
 
       {/* HERO */}
-      <section className="hero" id="home">
+
+      <section
+        className="hero"
+        id="home"
+      >
         <div className="container hero-content">
 
           <div className="hero-text">
@@ -239,25 +395,40 @@ function App() {
               </button>
 
             </div>
+
           </div>
 
           <div className="hero-card">
 
             <div className="hero-card-top">
               <span>🎓</span>
-              <span>Student Application</span>
+              <span>
+                Student Application
+              </span>
             </div>
 
-            <h3>Find your university</h3>
+            <h3>
+              Find your university
+            </h3>
 
             <div className="select-box">
-              <span>Study Level</span>
-              <strong>Choose level</strong>
+              <span>
+                Study Level
+              </span>
+
+              <strong>
+                Choose level
+              </strong>
             </div>
 
             <div className="select-box">
-              <span>Major</span>
-              <strong>Choose your major</strong>
+              <span>
+                Major
+              </span>
+
+              <strong>
+                Choose your major
+              </strong>
             </div>
 
             <button
@@ -279,6 +450,7 @@ function App() {
       </section>
 
       {/* UNIVERSITIES */}
+
       <section
         className="universities"
         id="universities"
@@ -288,11 +460,15 @@ function App() {
           <div className="section-heading">
 
             <div>
+
               <span className="small-title">
                 OUR UNIVERSITIES
               </span>
 
-              <h2>Choose Your University</h2>
+              <h2>
+                Choose Your University
+              </h2>
+
             </div>
 
             <button
@@ -312,49 +488,60 @@ function App() {
 
           <div className="university-grid">
 
-            {universities.map((university) => (
+            {universities.map(
+              (university) => (
 
-              <div
-                className="university-card"
-                key={university.name}
-              >
+                <div
+                  className="university-card"
+                  key={university.name}
+                >
 
-                <div className="university-image">
-                  🎓
-                </div>
-
-                <div className="university-info">
-
-                  <span className="location">
-                    📍 {university.location}
-                  </span>
-
-                  <h3>{university.name}</h3>
-
-                  <p>{university.programs}</p>
-
-                  <div className="scholarship">
-                    🎁 {university.scholarship}
+                  <div className="university-image">
+                    🎓
                   </div>
 
-                  <button
-                    className="apply-button"
-                    onClick={handleApplication}
-                  >
-                    View University →
-                  </button>
+                  <div className="university-info">
+
+                    <span className="location">
+                      📍 {university.location}
+                    </span>
+
+                    <h3>
+                      {university.name}
+                    </h3>
+
+                    <p>
+                      {university.programs}
+                    </p>
+
+                    <div className="scholarship">
+                      🎁{" "}
+                      {university.scholarship}
+                    </div>
+
+                    <button
+                      className="apply-button"
+                      onClick={
+                        handleApplication
+                      }
+                    >
+                      View University →
+                    </button>
+
+                  </div>
 
                 </div>
 
-              </div>
-
-            ))}
+              )
+            )}
 
           </div>
+
         </div>
       </section>
 
       {/* HOW IT WORKS */}
+
       <section
         className="how-it-works"
         id="how-it-works"
@@ -367,7 +554,9 @@ function App() {
               SIMPLE PROCESS
             </span>
 
-            <h2>How MIDOYOL Works</h2>
+            <h2>
+              How MIDOYOL Works
+            </h2>
 
             <p>
               Choose. Apply. Track.
@@ -378,57 +567,77 @@ function App() {
           <div className="steps">
 
             <div className="step">
+
               <div className="step-number">
                 01
               </div>
 
-              <h3>Choose</h3>
+              <h3>
+                Choose
+              </h3>
 
               <p>
-                Find the university and program
-                that fits you.
+                Find the university and
+                program that fits you.
               </p>
+
             </div>
 
             <div className="step">
+
               <div className="step-number">
                 02
               </div>
 
-              <h3>Apply</h3>
+              <h3>
+                Apply
+              </h3>
 
               <p>
-                Submit your information and
-                required documents.
+                Submit your information
+                and required documents.
               </p>
+
             </div>
 
             <div className="step">
+
               <div className="step-number">
                 03
               </div>
 
-              <h3>Track</h3>
+              <h3>
+                Track
+              </h3>
 
               <p>
-                Follow your application status.
+                Follow your application
+                status.
               </p>
+
             </div>
 
           </div>
+
         </div>
       </section>
 
       {/* CTA */}
+
       <section className="cta">
+
         <div className="container cta-content">
 
           <div>
-            <span>READY TO START?</span>
+
+            <span>
+              READY TO START?
+            </span>
 
             <h2>
               Start Your University Journey.
             </h2>
+
           </div>
 
           <button
@@ -439,10 +648,13 @@ function App() {
           </button>
 
         </div>
+
       </section>
 
       {/* FOOTER */}
+
       <footer>
+
         <div className="container footer-content">
 
           <div>
@@ -454,36 +666,43 @@ function App() {
             </div>
 
             <p>
-              Your journey to university starts here.
+              Your journey to university
+              starts here.
             </p>
 
           </div>
 
           <p>
-            © 2026 MIDOYOL. All rights reserved.
+            © 2026 MIDOYOL.
+            All rights reserved.
           </p>
 
         </div>
+
       </footer>
 
-      {/* LOGIN MODAL */}
-      {showLogin && (
+      {/* AUTH MODAL */}
+
+      {showAuth && (
+
         <div className="login-overlay">
 
           <div className="login-modal">
 
             <button
               className="login-close"
-              onClick={closeLogin}
+              onClick={closeAuth}
               disabled={loading}
             >
               ×
             </button>
 
             <div className="login-logo">
+
               <span className="logo-diamond">
                 <span>MIDOYOL</span>
               </span>
+
             </div>
 
             <h2>
@@ -493,14 +712,60 @@ function App() {
             </h2>
 
             <p className="login-subtitle">
+
               {isRegister
                 ? "Create your student account."
                 : "Login to continue your application."}
+
             </p>
 
-            <form onSubmit={handleAuth}>
+            <form
+              onSubmit={
+                isRegister
+                  ? handleRegister
+                  : handleLogin
+              }
+            >
 
-              <label>Email</label>
+              {isRegister && (
+                <>
+                  <label>
+                    First Name
+                  </label>
+
+                  <input
+                    type="text"
+                    placeholder="Enter your first name"
+                    value={firstName}
+                    onChange={(e) =>
+                      setFirstName(
+                        e.target.value
+                      )
+                    }
+                    autoComplete="given-name"
+                  />
+
+                  <label>
+                    Last Name
+                  </label>
+
+                  <input
+                    type="text"
+                    placeholder="Enter your last name"
+                    value={lastName}
+                    onChange={(e) =>
+                      setLastName(
+                        e.target.value
+                      )
+                    }
+                    autoComplete="family-name"
+                  />
+                </>
+              )}
+
+              <label>
+                Email
+              </label>
 
               <input
                 type="email"
@@ -512,14 +777,52 @@ function App() {
                 autoComplete="email"
               />
 
-              <label>Password</label>
+              {isRegister && (
+                <>
+                  <label>
+                    Date of Birth
+                  </label>
+
+                  <input
+                    type="date"
+                    value={dateOfBirth}
+                    onChange={(e) =>
+                      setDateOfBirth(
+                        e.target.value
+                      )
+                    }
+                  />
+
+                  <label>
+                    Country
+                  </label>
+
+                  <input
+                    type="text"
+                    placeholder="Enter your country"
+                    value={country}
+                    onChange={(e) =>
+                      setCountry(
+                        e.target.value
+                      )
+                    }
+                    autoComplete="country-name"
+                  />
+                </>
+              )}
+
+              <label>
+                Password
+              </label>
 
               <input
                 type="password"
                 placeholder="Enter your password"
                 value={password}
                 onChange={(e) =>
-                  setPassword(e.target.value)
+                  setPassword(
+                    e.target.value
+                  )
                 }
                 autoComplete={
                   isRegister
@@ -527,6 +830,45 @@ function App() {
                     : "current-password"
                 }
               />
+
+              {isRegister && (
+                <>
+                  <label>
+                    Confirm Password
+                  </label>
+
+                  <input
+                    type="password"
+                    placeholder="Confirm your password"
+                    value={confirmPassword}
+                    onChange={(e) =>
+                      setConfirmPassword(
+                        e.target.value
+                      )
+                    }
+                    autoComplete="new-password"
+                  />
+
+                  <label className="terms-label">
+
+                    <input
+                      type="checkbox"
+                      checked={acceptedTerms}
+                      onChange={(e) =>
+                        setAcceptedTerms(
+                          e.target.checked
+                        )
+                      }
+                    />
+
+                    <span>
+                      I agree to the Terms &
+                      Privacy Policy.
+                    </span>
+
+                  </label>
+                </>
+              )}
 
               <button
                 type="submit"
@@ -545,7 +887,10 @@ function App() {
             {!isRegister && (
               <button
                 className="forgot-password"
-                onClick={handleResetPassword}
+                onClick={
+                  handleResetPassword
+                }
+                disabled={loading}
               >
                 Forgot Password?
               </button>
@@ -565,7 +910,9 @@ function App() {
 
               <button
                 onClick={() => {
-                  setIsRegister(!isRegister);
+                  setIsRegister(
+                    !isRegister
+                  );
                   setMessage("");
                 }}
               >
@@ -577,7 +924,9 @@ function App() {
             </div>
 
           </div>
+
         </div>
+
       )}
 
     </div>
