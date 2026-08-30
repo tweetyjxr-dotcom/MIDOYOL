@@ -4,6 +4,10 @@
   box-sizing: border-box;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 body {
   font-family: Arial, sans-serif;
   background: #f7fbff;
@@ -28,9 +32,7 @@ a {
   margin: auto;
 }
 
-/* =========================
-   LOGO
-========================= */
+/* LOGO */
 
 .logo {
   display: flex;
@@ -57,9 +59,7 @@ a {
   white-space: nowrap;
 }
 
-/* =========================
-   NAVBAR
-========================= */
+/* NAVBAR */
 
 .navbar {
   background: white;
@@ -116,9 +116,7 @@ a {
   opacity: 0.9;
 }
 
-/* =========================
-   HERO
-========================= */
+/* HERO */
 
 .hero {
   padding: 80px 0;
@@ -179,9 +177,7 @@ a {
   font-weight: 700;
 }
 
-/* =========================
-   APPLICATION CARD
-========================= */
+/* APPLICATION CARD */
 
 .hero-card {
   background: white;
@@ -233,9 +229,7 @@ a {
   margin-top: 8px;
 }
 
-/* =========================
-   UNIVERSITIES
-========================= */
+/* UNIVERSITIES */
 
 .universities {
   padding: 85px 0;
@@ -335,9 +329,7 @@ a {
   color: white;
 }
 
-/* =========================
-   HOW IT WORKS
-========================= */
+/* HOW IT WORKS */
 
 .how-it-works {
   padding: 85px 0;
@@ -384,9 +376,7 @@ a {
   font-size: 14px;
 }
 
-/* =========================
-   CTA
-========================= */
+/* CTA */
 
 .cta {
   padding: 60px 0;
@@ -417,9 +407,7 @@ a {
   color: #1499d5;
 }
 
-/* =========================
-   FOOTER
-========================= */
+/* FOOTER */
 
 footer {
   background: white;
@@ -438,9 +426,7 @@ footer {
   font-size: 13px;
 }
 
-/* =========================
-   LOGIN
-========================= */
+/* LOGIN */
 
 .login-overlay {
   position: fixed;
@@ -449,15 +435,18 @@ footer {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding: 15px;
   z-index: 999;
+  overflow-y: auto;
 }
 
 .login-modal {
-  width: min(430px, 100%);
+  width: min(440px, 100%);
+  max-height: 94vh;
+  overflow-y: auto;
   background: white;
   border-radius: 22px;
-  padding: 35px;
+  padding: 32px;
   position: relative;
   box-shadow:
     0 25px 80px rgba(0, 0, 0, 0.2);
@@ -465,8 +454,8 @@ footer {
 
 .login-close {
   position: absolute;
-  top: 15px;
-  right: 18px;
+  top: 12px;
+  right: 17px;
   border: none;
   background: transparent;
   font-size: 28px;
@@ -476,19 +465,19 @@ footer {
 .login-logo {
   display: flex;
   justify-content: center;
-  margin: 12px 0 35px;
+  margin: 8px 0 28px;
 }
 
 .login-modal h2 {
   text-align: center;
-  font-size: 28px;
+  font-size: 27px;
 }
 
 .login-subtitle {
   text-align: center;
   color: #7b8d98;
   font-size: 14px;
-  margin: 9px 0 25px;
+  margin: 8px 0 23px;
 }
 
 .login-modal form {
@@ -503,14 +492,18 @@ footer {
   margin-bottom: 7px;
 }
 
-.login-modal input {
+.login-modal input[type="email"],
+.login-modal input[type="password"],
+.login-modal input[type="text"],
+.login-modal input[type="date"] {
   width: 100%;
   border: 1px solid #dceaf1;
   border-radius: 10px;
-  padding: 14px;
-  margin-bottom: 17px;
+  padding: 13px;
+  margin-bottom: 15px;
   outline: none;
   font-size: 14px;
+  background: white;
 }
 
 .login-modal input:focus {
@@ -532,26 +525,27 @@ footer {
   border: none;
   background: transparent;
   color: #1499d5;
-  margin-top: 17px;
+  margin-top: 16px;
   font-size: 13px;
   font-weight: 700;
 }
 
 .login-message {
-  margin-top: 18px;
+  margin-top: 16px;
   padding: 12px;
   background: #effaff;
   border-radius: 9px;
   color: #147fae;
   font-size: 13px;
   text-align: center;
+  line-height: 1.5;
 }
 
 .login-switch {
   text-align: center;
   color: #7b8d98;
   font-size: 13px;
-  margin-top: 22px;
+  margin-top: 20px;
 }
 
 .login-switch button {
@@ -561,9 +555,30 @@ footer {
   font-weight: 800;
 }
 
-/* =========================
-   MOBILE
-========================= */
+.terms-label {
+  display: flex !important;
+  align-items: flex-start;
+  gap: 9px;
+  margin: 2px 0 15px;
+  cursor: pointer;
+}
+
+.terms-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  flex-shrink: 0;
+  accent-color: #1499d5;
+}
+
+.terms-label span {
+  color: #6d818d;
+  font-size: 12px;
+  line-height: 1.5;
+  font-weight: 500;
+}
+
+/* MOBILE */
 
 @media (max-width: 850px) {
   .hero-content {
@@ -600,11 +615,16 @@ footer {
     align-items: flex-start;
   }
 
+  .login-modal {
+    padding: 28px 20px;
+    border-radius: 18px;
+  }
+
+  .login-modal h2 {
+    font-size: 24px;
+  }
+
   .logo-diamond span {
     font-size: 20px;
   }
-
-  .login-modal {
-    padding: 28px 22px;
-  }
-  }
+    }
