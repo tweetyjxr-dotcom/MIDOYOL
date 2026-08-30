@@ -19,6 +19,10 @@ import {
 
 import { auth, db } from "./firebase";
 
+/* =========================
+   UNIVERSITIES
+========================= */
+
 const universities = [
   {
     name: "Istanbul Aydin University",
@@ -38,13 +42,189 @@ const universities = [
     programs: "Bachelor & Master",
     scholarship: "Scholarships Available",
   },
+  {
+    name: "Nisantasi University",
+    location: "Istanbul, Türkiye",
+    programs: "Bachelor & Master",
+    scholarship: "Special Discounts",
+  },
+  {
+    name: "Bahcesehir University",
+    location: "Istanbul, Türkiye",
+    programs: "Bachelor & Master",
+    scholarship: "Scholarships Available",
+  },
+  {
+    name: "Biruni University",
+    location: "Istanbul, Türkiye",
+    programs: "Bachelor & Master",
+    scholarship: "Scholarships Available",
+  },
 ];
+
+/* =========================
+   FIELDS & MAJORS
+========================= */
+
+const fields = [
+  {
+    id: "medicine",
+    icon: "🩺",
+    name: "Medicine & Health",
+    description: "Medical and health-related programs",
+    majors: [
+      "Medicine",
+      "Dentistry",
+      "Pharmacy",
+      "Nursing",
+      "Physiotherapy",
+      "Nutrition & Dietetics",
+    ],
+  },
+  {
+    id: "engineering",
+    icon: "🏗️",
+    name: "Engineering",
+    description: "Build the future with technology",
+    majors: [
+      "Civil Engineering",
+      "Mechanical Engineering",
+      "Electrical Engineering",
+      "Industrial Engineering",
+      "Mechatronics Engineering",
+      "Architecture",
+    ],
+  },
+  {
+    id: "computer",
+    icon: "💻",
+    name: "Computer Science & IT",
+    description: "Technology, software and digital innovation",
+    majors: [
+      "Computer Engineering",
+      "Software Engineering",
+      "Computer Science",
+      "Artificial Intelligence",
+      "Information Technology",
+      "Cybersecurity",
+    ],
+  },
+  {
+    id: "business",
+    icon: "💼",
+    name: "Business & Economics",
+    description: "Business, finance and entrepreneurship",
+    majors: [
+      "Business Administration",
+      "International Business",
+      "Economics",
+      "Finance",
+      "Accounting",
+      "Marketing",
+    ],
+  },
+  {
+    id: "law",
+    icon: "⚖️",
+    name: "Law & Political Science",
+    description: "Law, politics and international relations",
+    majors: [
+      "Law",
+      "Political Science",
+      "International Relations",
+      "Public Administration",
+      "International Law",
+    ],
+  },
+  {
+    id: "social",
+    icon: "🌍",
+    name: "Social Sciences",
+    description: "People, society and human behavior",
+    majors: [
+      "Psychology",
+      "Sociology",
+      "Media & Communication",
+      "International Studies",
+      "Social Work",
+    ],
+  },
+  {
+    id: "arts",
+    icon: "🎨",
+    name: "Arts & Design",
+    description: "Creative programs and visual communication",
+    majors: [
+      "Graphic Design",
+      "Interior Design",
+      "Visual Communication",
+      "Fashion Design",
+      "Fine Arts",
+      "Film & Television",
+    ],
+  },
+  {
+    id: "science",
+    icon: "🧪",
+    name: "Sciences",
+    description: "Explore science and research",
+    majors: [
+      "Biology",
+      "Chemistry",
+      "Physics",
+      "Biotechnology",
+      "Mathematics",
+      "Molecular Biology",
+    ],
+  },
+  {
+    id: "education",
+    icon: "📚",
+    name: "Education",
+    description: "Build the next generation",
+    majors: [
+      "Early Childhood Education",
+      "Primary Education",
+      "English Teaching",
+      "Mathematics Teaching",
+      "Special Education",
+    ],
+  },
+];
+
+/* =========================
+   APP
+========================= */
 
 function App() {
   const [user, setUser] = useState(null);
+
   const [showAuth, setShowAuth] = useState(false);
   const [isRegister, setIsRegister] = useState(false);
+
   const [showPortal, setShowPortal] = useState(false);
+
+  const [selectedField, setSelectedField] = useState(null);
+  const [selectedMajor, setSelectedMajor] = useState("");
+  const [selectedUniversity, setSelectedUniversity] = useState(null);
+
+  const [applicationStep, setApplicationStep] = useState(0);
+
+  const [application, setApplication] = useState({
+    studyLevel: "",
+    field: "",
+    major: "",
+    university: "",
+    firstName: "",
+    lastName: "",
+    email: "",
+    country: "",
+    phone: "",
+    education: "",
+    documents: "",
+  });
+
+  /* AUTH FORM */
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -58,6 +238,10 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
 
+  /* =========================
+     AUTH STATE
+  ========================== */
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
@@ -69,6 +253,10 @@ function App() {
 
     return () => unsubscribe();
   }, []);
+
+  /* =========================
+     AUTH FUNCTIONS
+  ========================== */
 
   const openLogin = () => {
     setIsRegister(false);
@@ -98,10 +286,6 @@ function App() {
     setPassword("");
     setConfirmPassword("");
     setAcceptedTerms(false);
-  };
-
-  const enterPortal = () => {
-    setShowPortal(true);
   };
 
   const handleRegister = async (e) => {
@@ -173,7 +357,7 @@ function App() {
       setTimeout(() => {
         setShowAuth(false);
         setShowPortal(true);
-      }, 1000);
+      }, 900);
 
     } catch (error) {
       console.error(error);
@@ -184,10 +368,6 @@ function App() {
         setMessage("Please enter a valid email.");
       } else if (error.code === "auth/weak-password") {
         setMessage("Password must be at least 6 characters.");
-      } else if (error.code === "permission-denied") {
-        setMessage(
-          "Account created, but student information could not be saved."
-        );
       } else {
         setMessage("Something went wrong. Please try again.");
       }
@@ -273,20 +453,141 @@ function App() {
     try {
       await signOut(auth);
       setShowPortal(false);
+      setSelectedField(null);
+      setSelectedMajor("");
+      setSelectedUniversity(null);
+      setApplicationStep(0);
     } catch (error) {
       console.error(error);
     }
   };
 
-  const handleApplication = () => {
+  /* =========================
+     APPLICATION
+  ========================== */
+
+  const startApplication = () => {
     if (!user) {
       openLogin();
       return;
     }
 
-    alert(
-      "Your application system will be available soon."
+    setApplicationStep(1);
+
+    setTimeout(() => {
+      document
+        .getElementById("application")
+        ?.scrollIntoView({
+          behavior: "smooth",
+        });
+    }, 100);
+  };
+
+  const chooseField = (field) => {
+    setSelectedField(field);
+    setSelectedMajor("");
+
+    setApplication((prev) => ({
+      ...prev,
+      field: field.name,
+      major: "",
+    }));
+  };
+
+  const chooseMajor = (major) => {
+    setSelectedMajor(major);
+
+    setApplication((prev) => ({
+      ...prev,
+      major,
+    }));
+
+    setApplicationStep(2);
+
+    setTimeout(() => {
+      document
+        .getElementById("universities")
+        ?.scrollIntoView({
+          behavior: "smooth",
+        });
+    }, 100);
+  };
+
+  const chooseUniversity = (university) => {
+    setSelectedUniversity(university);
+
+    setApplication((prev) => ({
+      ...prev,
+      university: university.name,
+    }));
+
+    setApplicationStep(3);
+
+    setTimeout(() => {
+      document
+        .getElementById("application")
+        ?.scrollIntoView({
+          behavior: "smooth",
+        });
+    }, 100);
+  };
+
+  const updateApplication = (field, value) => {
+    setApplication((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const continueApplication = () => {
+    setApplicationStep((prev) => prev + 1);
+  };
+
+  const goBackApplication = () => {
+    setApplicationStep((prev) =>
+      Math.max(1, prev - 1)
     );
+  };
+
+  const submitApplication = async () => {
+    if (!user) {
+      openLogin();
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      await setDoc(
+        doc(
+          db,
+          "applications",
+          `${user.uid}_${Date.now()}`
+        ),
+        {
+          studentId: user.uid,
+          studentEmail: user.email,
+          ...application,
+          status: "Pending Payment",
+          applicationFee: 1,
+          currency: "USD",
+          createdAt: serverTimestamp(),
+        }
+      );
+
+      setApplicationStep(6);
+      setMessage(
+        "Application saved. Payment is the final step."
+      );
+
+    } catch (error) {
+      console.error(error);
+      setMessage(
+        "Unable to save your application. Please try again."
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   /* =========================
@@ -320,14 +621,17 @@ function App() {
             </h1>
 
             <p>
-              Discover universities, choose your major,
-              and start your university application
-              through MIDOYOL.
+              Discover universities, explore your field,
+              choose your major, and apply through
+              MIDOYOL from anywhere in the world.
             </p>
 
-            <div className="landing-fee">
-              Start your application for just
-              <strong>$1</strong>
+            <div className="landing-features">
+
+              <span>✓ Universities</span>
+              <span>✓ Programs</span>
+              <span>✓ Application Support</span>
+
             </div>
 
             <div className="landing-buttons">
@@ -354,31 +658,47 @@ function App() {
 
           </div>
 
-          <div className="globe-area">
+          <div className="landing-right">
 
-            <div className="globe-glow"></div>
+            <div className="landing-card">
 
-            <div className="globe">
+              <div className="landing-card-icon">
+                🎓
+              </div>
 
-              <div className="globe-land land-one"></div>
-              <div className="globe-land land-two"></div>
-              <div className="globe-land land-three"></div>
+              <h2>
+                Find Your Future
+              </h2>
 
-              <div className="globe-line line-one"></div>
-              <div className="globe-line line-two"></div>
-              <div className="globe-line line-three"></div>
+              <p>
+                Choose your field, discover your major,
+                find a university and start your journey.
+              </p>
 
-            </div>
+              <div className="landing-card-line">
+                <span>01</span>
+                Choose Your Field
+              </div>
 
-            <div className="flag flag-turkey">🇹🇷</div>
-            <div className="flag flag-sudan">🇸🇩</div>
-            <div className="flag flag-uk">🇬🇧</div>
-            <div className="flag flag-germany">🇩🇪</div>
-            <div className="flag flag-brazil">🇧🇷</div>
-            <div className="flag flag-saudi">🇸🇦</div>
+              <div className="landing-card-line">
+                <span>02</span>
+                Choose Your Major
+              </div>
 
-            <div className="globe-label">
-              STUDENTS AROUND THE WORLD
+              <div className="landing-card-line">
+                <span>03</span>
+                Choose Your University
+              </div>
+
+              <div className="landing-card-line">
+                <span>04</span>
+                Complete Your Application
+              </div>
+
+              <div className="landing-card-world">
+                🌍 Students Worldwide
+              </div>
+
             </div>
 
           </div>
@@ -425,7 +745,10 @@ function App() {
   return (
     <div className="app">
 
+      {/* NAVBAR */}
+
       <nav className="navbar">
+
         <div className="container nav-content">
 
           <div className="logo">
@@ -434,14 +757,20 @@ function App() {
 
           <div className="nav-links">
 
-            <a href="#home">Home</a>
+            <a href="#home">
+              Home
+            </a>
+
+            <a href="#fields">
+              Fields
+            </a>
 
             <a href="#universities">
               Universities
             </a>
 
-            <a href="#how-it-works">
-              How It Works
+            <a href="#application">
+              Application
             </a>
 
             <button
@@ -455,108 +784,49 @@ function App() {
 
           <button
             className="nav-button"
-            onClick={handleApplication}
+            onClick={startApplication}
           >
             Start Application
           </button>
 
         </div>
+
       </nav>
 
+      {/* WELCOME */}
+
       <section
-        className="hero"
+        className="portal-welcome"
         id="home"
       >
-        <div className="container hero-content">
 
-          <div className="hero-text">
+        <div className="container">
 
-            <span className="hero-label">
-              UNIVERSITY ADMISSION PLATFORM
-            </span>
+          <span className="hero-label">
+            WELCOME TO MIDOYOL
+          </span>
 
-            <h1>
-              Your Journey to
-              <span> University </span>
-              Starts Here
-            </h1>
+          <h1>
+            Find the right
+            <span> path for your future.</span>
+          </h1>
 
-            <p>
-              Find your university and start your
-              application with MIDOYOL.
-            </p>
-
-            <div className="hero-buttons">
-
-              <button
-                className="primary-button"
-                onClick={handleApplication}
-              >
-                Start Your Application
-              </button>
-
-              <button
-                className="secondary-button"
-                onClick={() =>
-                  document
-                    .getElementById("universities")
-                    ?.scrollIntoView({
-                      behavior: "smooth",
-                    })
-                }
-              >
-                Explore Universities
-              </button>
-
-            </div>
-
-          </div>
-
-          <div className="hero-card">
-
-            <div className="hero-card-top">
-              <span>🎓</span>
-              <span>
-                Student Application
-              </span>
-            </div>
-
-            <h3>
-              Find your university
-            </h3>
-
-            <div className="select-box">
-              <span>Study Level</span>
-              <strong>Choose level</strong>
-            </div>
-
-            <div className="select-box">
-              <span>Major</span>
-              <strong>Choose your major</strong>
-            </div>
-
-            <button
-              className="primary-button full"
-              onClick={() =>
-                document
-                  .getElementById("universities")
-                  ?.scrollIntoView({
-                    behavior: "smooth",
-                  })
-              }
-            >
-              Find Universities
-            </button>
-
-          </div>
+          <p>
+            Explore fields and majors, discover universities,
+            and complete your application step by step.
+          </p>
 
         </div>
+
       </section>
 
+      {/* FIELDS */}
+
       <section
-        className="universities"
-        id="universities"
+        className="fields-section"
+        id="fields"
       >
+
         <div className="container">
 
           <div className="section-heading">
@@ -564,7 +834,129 @@ function App() {
             <div>
 
               <span className="small-title">
-                OUR UNIVERSITIES
+                EXPLORE YOUR OPTIONS
+              </span>
+
+              <h2>
+                What do you want to study?
+              </h2>
+
+            </div>
+
+          </div>
+
+          <div className="fields-grid">
+
+            {fields.map((field) => (
+
+              <button
+                className={`field-card ${
+                  selectedField?.id === field.id
+                    ? "field-selected"
+                    : ""
+                }`}
+                key={field.id}
+                onClick={() => chooseField(field)}
+              >
+
+                <div className="field-icon">
+                  {field.icon}
+                </div>
+
+                <h3>
+                  {field.name}
+                </h3>
+
+                <p>
+                  {field.description}
+                </p>
+
+                <span>
+                  Explore majors →
+                </span>
+
+              </button>
+
+            ))}
+
+          </div>
+
+          {selectedField && (
+
+            <div className="major-box">
+
+              <div className="major-header">
+
+                <div>
+
+                  <span className="small-title">
+                    SELECTED FIELD
+                  </span>
+
+                  <h2>
+                    {selectedField.icon}{" "}
+                    {selectedField.name}
+                  </h2>
+
+                </div>
+
+                <button
+                  onClick={() => {
+                    setSelectedField(null);
+                    setSelectedMajor("");
+                  }}
+                >
+                  Change Field
+                </button>
+
+              </div>
+
+              <div className="major-grid">
+
+                {selectedField.majors.map((major) => (
+
+                  <button
+                    key={major}
+                    className={
+                      selectedMajor === major
+                        ? "major-selected"
+                        : ""
+                    }
+                    onClick={() =>
+                      chooseMajor(major)
+                    }
+                  >
+                    {major}
+                    <span>→</span>
+                  </button>
+
+                ))}
+
+              </div>
+
+            </div>
+
+          )}
+
+        </div>
+
+      </section>
+
+      {/* UNIVERSITIES */}
+
+      <section
+        className="universities"
+        id="universities"
+      >
+
+        <div className="container">
+
+          <div className="section-heading">
+
+            <div>
+
+              <span className="small-title">
+                FIND YOUR UNIVERSITY
               </span>
 
               <h2>
@@ -573,74 +965,714 @@ function App() {
 
             </div>
 
-            <button
-              className="view-all"
-              onClick={() =>
-                document
-                  .getElementById("universities")
-                  ?.scrollIntoView({
-                    behavior: "smooth",
-                  })
-              }
-            >
-              View All →
-            </button>
-
           </div>
 
-          <div className="university-grid">
+          {!selectedMajor ? (
 
-            {universities.map((university) => (
+            <div className="selection-message">
+              <span>🎓</span>
+              <h3>
+                Choose a major first
+              </h3>
+              <p>
+                Select a field and major above to
+                continue your university search.
+              </p>
+            </div>
 
-              <div
-                className="university-card"
-                key={university.name}
-              >
+          ) : (
 
-                <div className="university-image">
-                  🎓
-                </div>
+            <>
 
-                <div className="university-info">
+              <div className="selected-program">
 
-                  <span className="location">
-                    📍 {university.location}
-                  </span>
+                <span>
+                  YOUR SELECTION
+                </span>
 
-                  <h3>
-                    {university.name}
-                  </h3>
-
-                  <p>
-                    {university.programs}
-                  </p>
-
-                  <div className="scholarship">
-                    🎁 {university.scholarship}
-                  </div>
-
-                  <button
-                    className="apply-button"
-                    onClick={handleApplication}
-                  >
-                    View University →
-                  </button>
-
-                </div>
+                <strong>
+                  {selectedField?.name}
+                  {" • "}
+                  {selectedMajor}
+                </strong>
 
               </div>
 
-            ))}
+              <div className="university-grid">
+
+                {universities.map((university) => (
+
+                  <div
+                    className={`university-card ${
+                      selectedUniversity?.name ===
+                      university.name
+                        ? "university-selected"
+                        : ""
+                    }`}
+                    key={university.name}
+                  >
+
+                    <div className="university-image">
+                      🎓
+                    </div>
+
+                    <div className="university-info">
+
+                      <span className="location">
+                        📍 {university.location}
+                      </span>
+
+                      <h3>
+                        {university.name}
+                      </h3>
+
+                      <p>
+                        {university.programs}
+                      </p>
+
+                      <div className="scholarship">
+                        🎁 {university.scholarship}
+                      </div>
+
+                      <button
+                        className="apply-button"
+                        onClick={() =>
+                          chooseUniversity(
+                            university
+                          )
+                        }
+                      >
+                        Select University →
+                      </button>
+
+                    </div>
+
+                  </div>
+
+                ))}
+
+              </div>
+
+            </>
+
+          )}
+
+        </div>
+
+      </section>
+
+      {/* APPLICATION */}
+
+      <section
+        className="application-section"
+        id="application"
+      >
+
+        <div className="container">
+
+          <div className="section-center">
+
+            <span className="small-title">
+              YOUR APPLICATION
+            </span>
+
+            <h2>
+              Complete Your Application
+            </h2>
+
+            <p>
+              Your application is completed step by step.
+            </p>
 
           </div>
 
+          {applicationStep === 0 && (
+
+            <div className="application-start">
+
+              <div className="application-start-icon">
+                📝
+              </div>
+
+              <h3>
+                Ready to apply?
+              </h3>
+
+              <p>
+                Choose your field, major and university
+                before starting your application.
+              </p>
+
+              <button
+                className="primary-button"
+                onClick={startApplication}
+              >
+                Start Application
+              </button>
+
+            </div>
+
+          )}
+
+          {applicationStep >= 1 &&
+            applicationStep <= 5 && (
+
+            <div className="application-box">
+
+              {/* PROGRESS */}
+
+              <div className="application-progress">
+
+                {[1, 2, 3, 4, 5].map((step) => (
+
+                  <div
+                    className={
+                      applicationStep >= step
+                        ? "progress-active"
+                        : ""
+                    }
+                    key={step}
+                  >
+                    <span>{step}</span>
+                  </div>
+
+                ))}
+
+              </div>
+
+              {/* STEP 1 */}
+
+              {applicationStep === 1 && (
+
+                <div className="application-step">
+
+                  <span className="small-title">
+                    STEP 1
+                  </span>
+
+                  <h3>
+                    Choose your study level
+                  </h3>
+
+                  <p>
+                    What level do you want to study?
+                  </p>
+
+                  <div className="choice-grid">
+
+                    {[
+                      "Bachelor's Degree",
+                      "Master's Degree",
+                      "PhD",
+                    ].map((level) => (
+
+                      <button
+                        className={
+                          application.studyLevel ===
+                          level
+                            ? "choice-selected"
+                            : ""
+                        }
+                        key={level}
+                        onClick={() =>
+                          updateApplication(
+                            "studyLevel",
+                            level
+                          )
+                        }
+                      >
+                        🎓 {level}
+                      </button>
+
+                    ))}
+
+                  </div>
+
+                  <div className="application-actions">
+
+                    <button
+                      className="secondary-button"
+                      onClick={() =>
+                        setApplicationStep(0)
+                      }
+                    >
+                      Back
+                    </button>
+
+                    <button
+                      className="primary-button"
+                      disabled={!application.studyLevel}
+                      onClick={continueApplication}
+                    >
+                      Continue →
+                    </button>
+
+                  </div>
+
+                </div>
+
+              )}
+
+              {/* STEP 2 */}
+
+              {applicationStep === 2 && (
+
+                <div className="application-step">
+
+                  <span className="small-title">
+                    STEP 2
+                  </span>
+
+                  <h3>
+                    Confirm your program
+                  </h3>
+
+                  <div className="summary-card">
+
+                    <div>
+                      <span>Field</span>
+                      <strong>
+                        {application.field}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span>Major</span>
+                      <strong>
+                        {application.major}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span>Study Level</span>
+                      <strong>
+                        {application.studyLevel}
+                      </strong>
+                    </div>
+
+                  </div>
+
+                  <div className="application-actions">
+
+                    <button
+                      className="secondary-button"
+                      onClick={goBackApplication}
+                    >
+                      Back
+                    </button>
+
+                    <button
+                      className="primary-button"
+                      onClick={continueApplication}
+                    >
+                      Continue →
+                    </button>
+
+                  </div>
+
+                </div>
+
+              )}
+
+              {/* STEP 3 */}
+
+              {applicationStep === 3 && (
+
+                <div className="application-step">
+
+                  <span className="small-title">
+                    STEP 3
+                  </span>
+
+                  <h3>
+                    Personal Information
+                  </h3>
+
+                  <div className="form-grid">
+
+                    <div>
+                      <label>
+                        First Name
+                      </label>
+
+                      <input
+                        type="text"
+                        value={
+                          application.firstName
+                        }
+                        onChange={(e) =>
+                          updateApplication(
+                            "firstName",
+                            e.target.value
+                          )
+                        }
+                        placeholder="First name"
+                      />
+                    </div>
+
+                    <div>
+                      <label>
+                        Last Name
+                      </label>
+
+                      <input
+                        type="text"
+                        value={
+                          application.lastName
+                        }
+                        onChange={(e) =>
+                          updateApplication(
+                            "lastName",
+                            e.target.value
+                          )
+                        }
+                        placeholder="Last name"
+                      />
+                    </div>
+
+                    <div>
+                      <label>
+                        Email
+                      </label>
+
+                      <input
+                        type="email"
+                        value={
+                          application.email ||
+                          user?.email ||
+                          ""
+                        }
+                        onChange={(e) =>
+                          updateApplication(
+                            "email",
+                            e.target.value
+                          )
+                        }
+                        placeholder="Email"
+                      />
+                    </div>
+
+                    <div>
+                      <label>
+                        Country
+                      </label>
+
+                      <input
+                        type="text"
+                        value={
+                          application.country
+                        }
+                        onChange={(e) =>
+                          updateApplication(
+                            "country",
+                            e.target.value
+                          )
+                        }
+                        placeholder="Country"
+                      />
+                    </div>
+
+                    <div className="full-form">
+                      <label>
+                        Phone Number
+                      </label>
+
+                      <input
+                        type="tel"
+                        value={
+                          application.phone
+                        }
+                        onChange={(e) =>
+                          updateApplication(
+                            "phone",
+                            e.target.value
+                          )
+                        }
+                        placeholder="+90..."
+                      />
+                    </div>
+
+                  </div>
+
+                  <div className="application-actions">
+
+                    <button
+                      className="secondary-button"
+                      onClick={goBackApplication}
+                    >
+                      Back
+                    </button>
+
+                    <button
+                      className="primary-button"
+                      onClick={continueApplication}
+                    >
+                      Continue →
+                    </button>
+
+                  </div>
+
+                </div>
+
+              )}
+
+              {/* STEP 4 */}
+
+              {applicationStep === 4 && (
+
+                <div className="application-step">
+
+                  <span className="small-title">
+                    STEP 4
+                  </span>
+
+                  <h3>
+                    Education & Documents
+                  </h3>
+
+                  <div className="form-grid">
+
+                    <div className="full-form">
+
+                      <label>
+                        Previous Education
+                      </label>
+
+                      <input
+                        type="text"
+                        value={
+                          application.education
+                        }
+                        onChange={(e) =>
+                          updateApplication(
+                            "education",
+                            e.target.value
+                          )
+                        }
+                        placeholder="High school / Bachelor's degree..."
+                      />
+
+                    </div>
+
+                    <div className="full-form">
+
+                      <label>
+                        Documents
+                      </label>
+
+                      <textarea
+                        value={
+                          application.documents
+                        }
+                        onChange={(e) =>
+                          updateApplication(
+                            "documents",
+                            e.target.value
+                          )
+                        }
+                        placeholder="List the documents you have available..."
+                        rows="5"
+                      />
+
+                    </div>
+
+                  </div>
+
+                  <div className="application-actions">
+
+                    <button
+                      className="secondary-button"
+                      onClick={goBackApplication}
+                    >
+                      Back
+                    </button>
+
+                    <button
+                      className="primary-button"
+                      onClick={continueApplication}
+                    >
+                      Continue →
+                    </button>
+
+                  </div>
+
+                </div>
+
+              )}
+
+              {/* STEP 5 */}
+
+              {applicationStep === 5 && (
+
+                <div className="application-step">
+
+                  <span className="small-title">
+                    STEP 5
+                  </span>
+
+                  <h3>
+                    Review Your Application
+                  </h3>
+
+                  <div className="review-card">
+
+                    <div>
+                      <span>Study Level</span>
+                      <strong>
+                        {application.studyLevel}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span>Field</span>
+                      <strong>
+                        {application.field}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span>Major</span>
+                      <strong>
+                        {application.major}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span>University</span>
+                      <strong>
+                        {application.university}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span>Student</span>
+                      <strong>
+                        {application.firstName}{" "}
+                        {application.lastName}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span>Country</span>
+                      <strong>
+                        {application.country}
+                      </strong>
+                    </div>
+
+                  </div>
+
+                  <div className="important-note">
+
+                    <strong>
+                      Final step
+                    </strong>
+
+                    <p>
+                      Your application information is
+                      ready. The application fee of
+                      <strong> $1 USD </strong>
+                      will only be requested after
+                      you finish reviewing your application.
+                    </p>
+
+                  </div>
+
+                  <div className="application-actions">
+
+                    <button
+                      className="secondary-button"
+                      onClick={goBackApplication}
+                    >
+                      Back
+                    </button>
+
+                    <button
+                      className="primary-button"
+                      onClick={submitApplication}
+                      disabled={loading}
+                    >
+                      {loading
+                        ? "Saving..."
+                        : "Continue to $1 Payment →"}
+                    </button>
+
+                  </div>
+
+                </div>
+
+              )}
+
+            </div>
+
+          )}
+
+          {/* FINAL PAYMENT */}
+
+          {applicationStep === 6 && (
+
+            <div className="payment-box">
+
+              <div className="payment-icon">
+                ✓
+              </div>
+
+              <span className="small-title">
+                APPLICATION READY
+              </span>
+
+              <h2>
+                One Final Step
+              </h2>
+
+              <p>
+                Your application has been prepared.
+                Complete the application fee to submit it.
+              </p>
+
+              <div className="payment-price">
+                <span>
+                  Application Fee
+                </span>
+
+                <strong>
+                  $1
+                </strong>
+
+                <small>
+                  USD
+                </small>
+              </div>
+
+              <button
+                className="primary-button payment-button"
+                onClick={() =>
+                  alert(
+                    "Payment gateway will be connected here."
+                  )
+                }
+              >
+                Pay $1 & Submit Application
+              </button>
+
+              <div className="payment-secure">
+                🔒 Secure payment • Application fee only
+              </div>
+
+            </div>
+
+          )}
+
         </div>
+
       </section>
+
+      {/* HOW IT WORKS */}
 
       <section
         className="how-it-works"
         id="how-it-works"
       >
+
         <div className="container">
 
           <div className="section-center">
@@ -667,11 +1699,13 @@ function App() {
                 01
               </div>
 
-              <h3>Choose</h3>
+              <h3>
+                Explore
+              </h3>
 
               <p>
-                Find the university and
-                program that fits you.
+                Choose the field and major
+                you want to study.
               </p>
 
             </div>
@@ -682,11 +1716,13 @@ function App() {
                 02
               </div>
 
-              <h3>Apply</h3>
+              <h3>
+                Apply
+              </h3>
 
               <p>
-                Submit your information
-                and required documents.
+                Complete your information
+                and application documents.
               </p>
 
             </div>
@@ -697,11 +1733,13 @@ function App() {
                 03
               </div>
 
-              <h3>Track</h3>
+              <h3>
+                Submit
+              </h3>
 
               <p>
-                Follow your application
-                status.
+                Pay the $1 application fee
+                at the final stage.
               </p>
 
             </div>
@@ -709,7 +1747,10 @@ function App() {
           </div>
 
         </div>
+
       </section>
+
+      {/* CTA */}
 
       <section className="cta">
 
@@ -717,7 +1758,9 @@ function App() {
 
           <div>
 
-            <span>READY TO START?</span>
+            <span>
+              READY TO START?
+            </span>
 
             <h2>
               Start Your University Journey.
@@ -727,7 +1770,7 @@ function App() {
 
           <button
             className="primary-button"
-            onClick={handleApplication}
+            onClick={startApplication}
           >
             Start Application →
           </button>
@@ -735,6 +1778,8 @@ function App() {
         </div>
 
       </section>
+
+      {/* FOOTER */}
 
       <footer>
 
@@ -763,7 +1808,6 @@ function App() {
     </div>
   );
 }
-
 
 /* =========================
    AUTH MODAL
@@ -834,7 +1878,9 @@ function AuthModal({
 
           {isRegister && (
             <>
-              <label>First Name</label>
+              <label>
+                First Name
+              </label>
 
               <input
                 type="text"
@@ -846,7 +1892,9 @@ function AuthModal({
                 autoComplete="given-name"
               />
 
-              <label>Last Name</label>
+              <label>
+                Last Name
+              </label>
 
               <input
                 type="text"
@@ -860,7 +1908,9 @@ function AuthModal({
             </>
           )}
 
-          <label>Email</label>
+          <label>
+            Email
+          </label>
 
           <input
             type="email"
@@ -874,7 +1924,9 @@ function AuthModal({
 
           {isRegister && (
             <>
-              <label>Date of Birth</label>
+              <label>
+                Date of Birth
+              </label>
 
               <input
                 type="date"
@@ -884,7 +1936,9 @@ function AuthModal({
                 }
               />
 
-              <label>Country</label>
+              <label>
+                Country
+              </label>
 
               <input
                 type="text"
@@ -898,7 +1952,9 @@ function AuthModal({
             </>
           )}
 
-          <label>Password</label>
+          <label>
+            Password
+          </label>
 
           <input
             type="password"
@@ -916,7 +1972,9 @@ function AuthModal({
 
           {isRegister && (
             <>
-              <label>Confirm Password</label>
+              <label>
+                Confirm Password
+              </label>
 
               <input
                 type="password"
@@ -934,12 +1992,15 @@ function AuthModal({
                   type="checkbox"
                   checked={acceptedTerms}
                   onChange={(e) =>
-                    setAcceptedTerms(e.target.checked)
+                    setAcceptedTerms(
+                      e.target.checked
+                    )
                   }
                 />
 
                 <span>
-                  I agree to the Terms & Privacy Policy.
+                  I agree to the Terms &
+                  Privacy Policy.
                 </span>
 
               </label>
@@ -985,6 +2046,7 @@ function AuthModal({
           <button
             onClick={() => {
               setIsRegister(!isRegister);
+              setMessage("");
             }}
           >
             {isRegister
