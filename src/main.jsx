@@ -1,10 +1,12 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import ReactDOM from "react-dom/client";
 import "./index.css";
 
 import {
   createUserWithEmailAndPassword,
   onAuthStateChanged,
+  reload,
+  sendEmailVerification,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut,
@@ -12,45 +14,37 @@ import {
 } from "firebase/auth";
 
 import {
+  addDoc,
+  collection,
   doc,
-  setDoc,
+  getDoc,
+  getDocs,
+  orderBy,
+  query,
   serverTimestamp,
+  setDoc,
 } from "firebase/firestore";
 
-import { auth, db } from "./firebase";
+import {
+  deleteObject,
+  getDownloadURL,
+  ref,
+  uploadBytes,
+} from "firebase/storage";
 
+import { auth, db, storage } from "./firebase";
 
-/* =========================
-   UNIVERSITIES
-========================= */
+/* =========================================================
+   MIDOYOL DATA
+========================================================= */
 
-const universities = [
-  {
-    name: "Istanbul Aydin University",
-    location: "Istanbul, Türkiye",
-    programs: "Bachelor & Master",
-    scholarship: "Scholarships Available",
-  },
-  {
-    name: "Istanbul Gelisim University",
-    location: "Istanbul, Türkiye",
-    programs: "Bachelor & Master",
-    scholarship: "Special Discounts",
-  },
-  {
-    name: "Istinye University",
-    location: "Istanbul, Türkiye",
-    programs: "Bachelor & Master",
-    scholarship: "Scholarships Available",
-  },
+const UNIVERSITIES = [
+  "Istanbul Aydin University",
+  "Istanbul Gelisim University",
+  "Istinye University",
 ];
 
-
-/* =========================
-   STUDY FIELDS
-========================= */
-
-const studyFields = {
+const STUDY_FIELDS = {
   "Medicine & Health": [
     "Medicine",
     "Dentistry",
@@ -60,7 +54,7 @@ const studyFields = {
     "Nutrition & Dietetics",
   ],
 
-  "Engineering": [
+  Engineering: [
     "Civil Engineering",
     "Mechanical Engineering",
     "Electrical & Electronics Engineering",
@@ -94,122 +88,618 @@ const studyFields = {
   ],
 };
 
+const REQUIRED_DOCUMENTS = [
+  {
+    id: "passport",
+    title: "Passport / ID",
+    description: "Upload a clear copy of your passport or national ID.",
+    accept: ".pdf,.jpg,.jpeg,.png",
+  },
+  {
+    id: "diploma",
+    title: "High School Diploma",
+    description: "Upload your high school diploma or graduation certificate.",
+    accept: ".pdf,.jpg,.jpeg,.png",
+  },
+  {
+    id: "transcript",
+    title: "Academic Transcript",
+    description: "Upload your latest academic transcript.",
+    accept: ".pdf,.jpg,.jpeg,.png",
+  },
+  {
+    id: "photo",
+    title: "Personal Photo",
+    description: "Upload a recent passport-style photo.",
+    accept: ".jpg,.jpeg,.png",
+  },
+];
 
-/* =========================
-   APP
-========================= */
+/* =========================================================
+   HELPERS
+========================================================= */
 
-function App() {
+const generateApplicationId = () => {
+  const year = new Date().getFullYear();
 
-  const [user, setUser] = useState(null);
+  const randomPart =
+    typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID().split("-")[0].toUpperCase()
+      : Math.random().toString(36).substring(2, 10).toUpperCase();
 
-  const [showAuth, setShowAuth] = useState(false);
-  const [isRegister, setIsRegister] = useState(false);
+  return `MIDO-${year}-${randomPart}`;
+};
 
-  const [showPortal, setShowPortal] = useState(false);
+const formatDate = (value) => {
+  if (!value) return "—";
 
-  const [selectedField, setSelectedField] = useState("");
-  const [selectedMajor, setSelectedMajor] = useState("");
-
-  const [showFields, setShowFields] = useState(false);
-  const [showMajors, setShowMajors] = useState(false);
-
-  /* AUTH FORM */
-
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [email, setEmail] = useState("");
-  const [dateOfBirth, setDateOfBirth] = useState("");
-  const [country, setCountry] = useState("");
-
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-
-  const [acceptedTerms, setAcceptedTerms] = useState(false);
-
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
-
-
-  /* =========================
-     AUTH STATE
-  ========================== */
-
-  useEffect(() => {
-
-    const unsubscribe = onAuthStateChanged(
-      auth,
-      (currentUser) => {
-
-        setUser(currentUser);
-
-        if (currentUser) {
-          setShowPortal(true);
-        }
-
-      }
-    );
-
-    return () => unsubscribe();
-
-  }, []);
-
-
-  /* =========================
-     AUTH OPEN / CLOSE
-  ========================== */
-
-  const openLogin = () => {
-
-    setIsRegister(false);
-    setMessage("");
-    setShowAuth(true);
-
-  };
-
-
-  const openRegister = () => {
-
-    setIsRegister(true);
-    setMessage("");
-    setShowAuth(true);
-
-  };
-
-
-  const closeAuth = () => {
-
-    if (!loading) {
-
-      setShowAuth(false);
-      setMessage("");
-
+  try {
+    if (value?.toDate) {
+      return value.toDate().toLocaleDateString("en-US");
     }
 
+    return new Date(value).toLocaleDateString("en-US");
+  } catch {
+    return "—";
+  }
+};
+
+const formatDateTime = (value) => {
+  if (!value) return "—";
+
+  try {
+    if (value?.toDate) {
+      return value.toDate().toLocaleString("en-US");
+    }
+
+    return new Date(value).toLocaleString("en-US");
+  } catch {
+    return "—";
+  }
+};
+
+const sleep = (ms) =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
+/* =========================================================
+   APP
+========================================================= */
+
+function App() {
+  const [user, setUser] = useState(null);
+  const [authChecking, setAuthChecking] = useState(true);
+
+  const [page, setPage] = useState("home");
+
+  const [showAuth, setShowAuth] = useState(false);
+  const [isRegister, setIsRegister] = useState(true);
+
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [showPaymentHistory, setShowPaymentHistory] = useState(false);
+  const [showSupport, setShowSupport] = useState(false);
+  const [showReceipt, setShowReceipt] = useState(null);
+
+  const [darkMode, setDarkMode] = useState(() => {
+    return localStorage.getItem("midoyol-dark-mode") === "true";
+  });
+
+  const [applicationId, setApplicationId] = useState("");
+  const [application, setApplication] = useState(null);
+
+  const [documents, setDocuments] = useState([]);
+  const [payments, setPayments] = useState([]);
+  const [notifications, setNotifications] = useState([]);
+
+  const [saving, setSaving] = useState(false);
+
+  /* ---------------------------------------------------------
+     AUTH
+  --------------------------------------------------------- */
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setUser(currentUser);
+      setAuthChecking(false);
+
+      if (!currentUser) {
+        setPage("home");
+        setApplicationId("");
+        setApplication(null);
+        setDocuments([]);
+        setPayments([]);
+        setNotifications([]);
+        return;
+      }
+
+      await loadStudentData(currentUser);
+
+      if (currentUser.emailVerified) {
+        setPage("dashboard");
+      } else {
+        setPage("verify");
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  /* ---------------------------------------------------------
+     DARK MODE
+  --------------------------------------------------------- */
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", darkMode);
+
+    localStorage.setItem(
+      "midoyol-dark-mode",
+      darkMode ? "true" : "false"
+    );
+  }, [darkMode]);
+
+  /* ---------------------------------------------------------
+     LOAD STUDENT
+  --------------------------------------------------------- */
+
+  const loadStudentData = async (currentUser) => {
+    try {
+      const studentRef = doc(db, "students", currentUser.uid);
+      const studentSnap = await getDoc(studentRef);
+
+      if (!studentSnap.exists()) {
+        await setDoc(
+          studentRef,
+          {
+            uid: currentUser.uid,
+            email: currentUser.email || "",
+            fullName: currentUser.displayName || "",
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        );
+
+        return;
+      }
+
+      const studentData = studentSnap.data();
+
+      if (studentData.currentApplicationId) {
+        setApplicationId(studentData.currentApplicationId);
+
+        await loadApplication(
+          currentUser.uid,
+          studentData.currentApplicationId
+        );
+      }
+
+      await loadNotifications(currentUser.uid);
+      await loadPayments(currentUser.uid);
+
+      if (studentData.currentApplicationId) {
+        await loadDocuments(
+          currentUser.uid,
+          studentData.currentApplicationId
+        );
+      }
+    } catch (error) {
+      console.error("Load student error:", error);
+    }
   };
 
+  /* ---------------------------------------------------------
+     APPLICATION
+  --------------------------------------------------------- */
 
-  const clearForm = () => {
+  const loadApplication = async (uid, id) => {
+    try {
+      const applicationRef = doc(db, "applications", id);
+      const applicationSnap = await getDoc(applicationRef);
 
-    setFirstName("");
-    setLastName("");
-    setEmail("");
-    setDateOfBirth("");
-    setCountry("");
-    setPassword("");
-    setConfirmPassword("");
-    setAcceptedTerms(false);
-
+      if (applicationSnap.exists()) {
+        setApplication(applicationSnap.data());
+      }
+    } catch (error) {
+      console.error("Load application error:", error);
+    }
   };
 
+  const ensureApplication = async () => {
+    if (!user) return null;
 
-  /* =========================
-     REGISTER
-  ========================== */
+    if (applicationId && application) {
+      return applicationId;
+    }
 
-  const handleRegister = async (e) => {
+    try {
+      const studentRef = doc(db, "students", user.uid);
+      const studentSnap = await getDoc(studentRef);
 
-    e.preventDefault();
+      if (studentSnap.exists()) {
+        const data = studentSnap.data();
+
+        if (data.currentApplicationId) {
+          const existingId = data.currentApplicationId;
+
+          setApplicationId(existingId);
+
+          await loadApplication(user.uid, existingId);
+
+          return existingId;
+        }
+      }
+
+      const newId = generateApplicationId();
+
+      const newApplication = {
+        applicationNumber: newId,
+        studentId: user.uid,
+        email: user.email || "",
+        stage: "choose",
+        status: "draft",
+
+        field: "",
+        specialization: "",
+        university: "",
+
+        documentsComplete: false,
+        paymentStatus: "coming_soon",
+
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      };
+
+      await setDoc(
+        doc(db, "applications", newId),
+        newApplication
+      );
+
+      await setDoc(
+        studentRef,
+        {
+          currentApplicationId: newId,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+
+      setApplicationId(newId);
+      setApplication(newApplication);
+
+      await createNotification(
+        "Application started",
+        `Your MIDOYOL application ${newId} has been created.`
+      );
+
+      return newId;
+    } catch (error) {
+      console.error("Create application error:", error);
+      alert("Could not create your application. Please try again.");
+      return null;
+    }
+  };
+
+  const saveApplication = async (updates = {}) => {
+    if (!user || !applicationId) return;
+
+    setSaving(true);
+
+    try {
+      const updatedApplication = {
+        ...application,
+        ...updates,
+        updatedAt: serverTimestamp(),
+      };
+
+      await setDoc(
+        doc(db, "applications", applicationId),
+        {
+          ...updates,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+
+      setApplication(updatedApplication);
+    } catch (error) {
+      console.error("Save application error:", error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /* ---------------------------------------------------------
+     DOCUMENTS
+  --------------------------------------------------------- */
+
+  const loadDocuments = async (uid, appId) => {
+    try {
+      const documentsRef = collection(
+        db,
+        "applications",
+        appId,
+        "documents"
+      );
+
+      const snapshot = await getDocs(documentsRef);
+
+      const loaded = snapshot.docs.map((item) => ({
+        id: item.id,
+        ...item.data(),
+      }));
+
+      setDocuments(loaded);
+    } catch (error) {
+      console.error("Load documents error:", error);
+    }
+  };
+
+  const uploadDocument = async (documentType, file) => {
+    if (!user || !applicationId || !file) return;
+
+    const maxSize = 10 * 1024 * 1024;
+
+    if (file.size > maxSize) {
+      alert("File is too large. Maximum size is 10 MB.");
+      return;
+    }
+
+    const allowedTypes = [
+      "application/pdf",
+      "image/jpeg",
+      "image/png",
+    ];
+
+    if (!allowedTypes.includes(file.type)) {
+      alert("Please upload a PDF, JPG, JPEG, or PNG file.");
+      return;
+    }
+
+    try {
+      setSaving(true);
+
+      const storagePath = `students/${user.uid}/applications/${applicationId}/${documentType}/${file.name}`;
+
+      const storageRef = ref(storage, storagePath);
+
+      await uploadBytes(storageRef, file, {
+        contentType: file.type,
+      });
+
+      const downloadURL = await getDownloadURL(storageRef);
+
+      await setDoc(
+        doc(
+          db,
+          "applications",
+          applicationId,
+          "documents",
+          documentType
+        ),
+        {
+          documentType,
+          fileName: file.name,
+          fileSize: file.size,
+          contentType: file.type,
+          storagePath,
+          downloadURL,
+          status: "uploaded",
+          uploadedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+
+      await loadDocuments(user.uid, applicationId);
+
+      await createNotification(
+        "Document uploaded",
+        `${documentType} has been uploaded successfully.`
+      );
+    } catch (error) {
+      console.error("Upload error:", error);
+      alert("Could not upload the document. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteDocument = async (documentItem) => {
+    if (!user || !applicationId || !documentItem?.storagePath) return;
+
+    const confirmed = window.confirm(
+      "Are you sure you want to remove this document?"
+    );
+
+    if (!confirmed) return;
+
+    try {
+      setSaving(true);
+
+      const storageRef = ref(storage, documentItem.storagePath);
+
+      await deleteObject(storageRef);
+
+      await setDoc(
+        doc(
+          db,
+          "applications",
+          applicationId,
+          "documents",
+          documentItem.documentType
+        ),
+        {
+          status: "missing",
+          fileName: "",
+          storagePath: "",
+          downloadURL: "",
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+
+      await loadDocuments(user.uid, applicationId);
+    } catch (error) {
+      console.error("Delete document error:", error);
+      alert("Could not remove the document.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /* ---------------------------------------------------------
+     PAYMENTS
+  --------------------------------------------------------- */
+
+  const loadPayments = async (uid) => {
+    try {
+      const paymentsRef = collection(db, "payments");
+
+      const snapshot = await getDocs(paymentsRef);
+
+      const loaded = snapshot.docs
+        .map((item) => ({
+          id: item.id,
+          ...item.data(),
+        }))
+        .filter((payment) => payment.studentId === uid)
+        .sort((a, b) => {
+          const aDate = a.createdAt?.toDate?.() || 0;
+          const bDate = b.createdAt?.toDate?.() || 0;
+
+          return bDate - aDate;
+        });
+
+      setPayments(loaded);
+    } catch (error) {
+      console.error("Load payments error:", error);
+    }
+  };
+
+  const createPaymentRequest = async () => {
+    if (!user || !applicationId) return;
+
+    try {
+      setSaving(true);
+
+      const paymentRef = await addDoc(collection(db, "payments"), {
+        studentId: user.uid,
+        applicationId,
+        type: "Application Fee",
+        amount: 1,
+        currency: "USD",
+        status: "pending",
+        transactionId: "",
+        createdAt: serverTimestamp(),
+      });
+
+      await loadPayments(user.uid);
+
+      await createNotification(
+        "Payment",
+        "Your $1 application fee payment request has been created. Payment gateway is coming soon."
+      );
+
+      alert(
+        `Payment request created.\n\nReference: ${paymentRef.id}\n\nThe payment gateway is coming soon.`
+      );
+    } catch (error) {
+      console.error("Payment request error:", error);
+      alert("Could not create the payment request.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /* ---------------------------------------------------------
+     NOTIFICATIONS
+  --------------------------------------------------------- */
+
+  const loadNotifications = async (uid) => {
+    try {
+      const notificationsRef = collection(
+        db,
+        "users",
+        uid,
+        "notifications"
+      );
+
+      const q = query(
+        notificationsRef,
+        orderBy("createdAt", "desc")
+      );
+
+      const snapshot = await getDocs(q);
+
+      const loaded = snapshot.docs.map((item) => ({
+        id: item.id,
+        ...item.data(),
+      }));
+
+      setNotifications(loaded);
+    } catch (error) {
+      console.error("Notifications error:", error);
+    }
+  };
+
+  const createNotification = async (title, message) => {
+    if (!user) return;
+
+    try {
+      await addDoc(
+        collection(db, "users", user.uid, "notifications"),
+        {
+          uid: user.uid,
+          title,
+          message,
+          read: false,
+          createdAt: serverTimestamp(),
+        }
+      );
+
+      await loadNotifications(user.uid);
+    } catch (error) {
+      console.error("Create notification error:", error);
+    }
+  };
+
+  const markNotificationRead = async (notificationId) => {
+    if (!user) return;
+
+    try {
+      await setDoc(
+        doc(
+          db,
+          "users",
+          user.uid,
+          "notifications",
+          notificationId
+        ),
+        {
+          read: true,
+        },
+        { merge: true }
+      );
+
+      await loadNotifications(user.uid);
+    } catch (error) {
+      console.error("Notification update error:", error);
+    }
+  };
+
+  /* ---------------------------------------------------------
+     AUTH FUNCTIONS
+  --------------------------------------------------------- */
+
+  const handleRegister = async (form) => {
+    const {
+      firstName,
+      lastName,
+      email,
+      dateOfBirth,
+      country,
+      password,
+      confirmPassword,
+      acceptedTerms,
+    } = form;
 
     if (
       !firstName ||
@@ -220,1496 +710,1709 @@ function App() {
       !password ||
       !confirmPassword
     ) {
-
-      setMessage(
-        "Please complete all required fields."
-      );
-
+      alert("Please complete all required fields.");
       return;
     }
-
 
     if (password.length < 6) {
-
-      setMessage(
-        "Password must be at least 6 characters."
-      );
-
+      alert("Password must contain at least 6 characters.");
       return;
     }
-
 
     if (password !== confirmPassword) {
-
-      setMessage(
-        "Passwords do not match."
-      );
-
+      alert("Passwords do not match.");
       return;
     }
-
 
     if (!acceptedTerms) {
-
-      setMessage(
-        "Please accept the Terms & Privacy Policy."
-      );
-
+      alert("Please accept the Terms & Privacy Policy.");
       return;
     }
 
-
     try {
+      setSaving(true);
 
-      setLoading(true);
-      setMessage("");
-
-
-      const userCredential =
+      const credential =
         await createUserWithEmailAndPassword(
           auth,
-          email.trim(),
+          email,
           password
         );
 
+      const newUser = credential.user;
 
-      const newUser =
-        userCredential.user;
-
-
-      const fullName =
-        `${firstName.trim()} ${lastName.trim()}`;
-
-
-      await updateProfile(
-        newUser,
-        {
-          displayName: fullName,
-        }
-      );
-
+      await updateProfile(newUser, {
+        displayName: `${firstName} ${lastName}`,
+      });
 
       await setDoc(
-        doc(
-          db,
-          "students",
-          newUser.uid
-        ),
+        doc(db, "students", newUser.uid),
         {
           uid: newUser.uid,
-          firstName: firstName.trim(),
-          lastName: lastName.trim(),
-          fullName,
-          email:
-            email.trim().toLowerCase(),
+          firstName,
+          lastName,
+          fullName: `${firstName} ${lastName}`,
+          email,
           dateOfBirth,
           country,
-          createdAt:
-            serverTimestamp(),
-        }
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
       );
 
-
-      setMessage(
-        "Account created successfully."
-      );
-
-
-      clearForm();
-
-
-      setTimeout(() => {
-
-        setShowAuth(false);
-        setShowPortal(true);
-
-      }, 1000);
-
-
-    } catch (error) {
-
-      console.error(error);
-
-
-      if (
-        error.code ===
-        "auth/email-already-in-use"
-      ) {
-
-        setMessage(
-          "This email is already registered."
+      try {
+        await sendEmailVerification(newUser);
+      } catch (verificationError) {
+        console.error(
+          "Verification email error:",
+          verificationError
         );
-
-      } else if (
-        error.code ===
-        "auth/invalid-email"
-      ) {
-
-        setMessage(
-          "Please enter a valid email."
-        );
-
-      } else if (
-        error.code ===
-        "auth/weak-password"
-      ) {
-
-        setMessage(
-          "Password must be at least 6 characters."
-        );
-
-      } else if (
-        error.code ===
-        "permission-denied"
-      ) {
-
-        setMessage(
-          "Account created, but student information could not be saved."
-        );
-
-      } else {
-
-        setMessage(
-          "Something went wrong. Please try again."
-        );
-
       }
 
+      setShowAuth(false);
+      setPage("verify");
+
+      alert(
+        "Account created successfully. Please check your email and verify your account."
+      );
+    } catch (error) {
+      console.error(error);
+
+      if (error.code === "auth/email-already-in-use") {
+        alert("This email is already registered.");
+      } else if (error.code === "auth/invalid-email") {
+        alert("Please enter a valid email address.");
+      } else if (error.code === "auth/weak-password") {
+        alert("Password is too weak.");
+      } else {
+        alert(
+          error.message ||
+            "Could not create your account."
+        );
+      }
     } finally {
-
-      setLoading(false);
-
+      setSaving(false);
     }
-
   };
 
-
-  /* =========================
-     LOGIN
-  ========================== */
-
-  const handleLogin = async (e) => {
-
-    e.preventDefault();
-
-
+  const handleLogin = async (email, password) => {
     if (!email || !password) {
-
-      setMessage(
-        "Please enter your email and password."
-      );
-
+      alert("Please enter your email and password.");
       return;
     }
 
-
     try {
+      setSaving(true);
 
-      setLoading(true);
-      setMessage("");
+      const credential =
+        await signInWithEmailAndPassword(
+          auth,
+          email,
+          password
+        );
 
+      const loggedUser = credential.user;
 
-      await signInWithEmailAndPassword(
-        auth,
-        email.trim(),
-        password
-      );
+      await reload(loggedUser);
 
-
-      setMessage(
-        "Login successful."
-      );
-
-
-      setTimeout(() => {
-
+      if (!auth.currentUser.emailVerified) {
         setShowAuth(false);
-        setShowPortal(true);
+        setPage("verify");
+        return;
+      }
 
-      }, 700);
+      await loadStudentData(loggedUser);
 
-
+      setShowAuth(false);
+      setPage("dashboard");
     } catch (error) {
-
       console.error(error);
 
-
       if (
-        error.code ===
-          "auth/invalid-credential" ||
-        error.code ===
-          "auth/wrong-password" ||
-        error.code ===
-          "auth/user-not-found"
+        error.code === "auth/invalid-credential" ||
+        error.code === "auth/wrong-password"
       ) {
-
-        setMessage(
-          "Email or password is incorrect."
-        );
-
-      } else if (
-        error.code ===
-        "auth/invalid-email"
-      ) {
-
-        setMessage(
-          "Please enter a valid email."
-        );
-
+        alert("Email or password is incorrect.");
+      } else if (error.code === "auth/user-not-found") {
+        alert("No account was found with this email.");
       } else {
-
-        setMessage(
-          "Something went wrong. Please try again."
+        alert(
+          error.message ||
+            "Could not sign you in."
         );
-
       }
-
     } finally {
-
-      setLoading(false);
-
+      setSaving(false);
     }
-
   };
 
-
-  /* =========================
-     RESET PASSWORD
-  ========================== */
-
-  const handleResetPassword = async () => {
-
+  const handleResetPassword = async (email) => {
     if (!email) {
-
-      setMessage(
-        "Enter your email first."
-      );
-
+      alert("Enter your email address first.");
       return;
     }
 
-
     try {
+      await sendPasswordResetEmail(auth, email);
 
-      setLoading(true);
-      setMessage("");
-
-
-      await sendPasswordResetEmail(
-        auth,
-        email.trim()
+      alert(
+        "Password reset email sent. Please check your inbox."
       );
-
-
-      setMessage(
-        "Password reset email sent. Check your inbox."
-      );
-
-
     } catch (error) {
+      console.error(error);
 
-      if (
-        error.code ===
-        "auth/user-not-found"
-      ) {
-
-        setMessage(
-          "No account was found with this email."
-        );
-
-      } else if (
-        error.code ===
-        "auth/invalid-email"
-      ) {
-
-        setMessage(
-          "Please enter a valid email."
-        );
-
-      } else {
-
-        setMessage(
-          "Unable to send reset email."
-        );
-
-      }
-
-    } finally {
-
-      setLoading(false);
-
+      alert(
+        error.message ||
+          "Could not send the password reset email."
+      );
     }
-
   };
 
-
-  /* =========================
-     LOGOUT
-  ========================== */
-
-  const handleLogout = async () => {
+  const resendVerification = async () => {
+    if (!auth.currentUser) return;
 
     try {
+      await sendEmailVerification(auth.currentUser);
 
+      alert(
+        "Verification email sent again. Please check your inbox."
+      );
+    } catch (error) {
+      console.error(error);
+
+      if (error.code === "auth/too-many-requests") {
+        alert(
+          "Too many requests. Please wait a little before trying again."
+        );
+      } else {
+        alert(
+          error.message ||
+            "Could not send the verification email."
+        );
+      }
+    }
+  };
+
+  const checkEmailVerification = async () => {
+    if (!auth.currentUser) return;
+
+    try {
+      setSaving(true);
+
+      await reload(auth.currentUser);
+
+      if (auth.currentUser.emailVerified) {
+        await loadStudentData(auth.currentUser);
+
+        setPage("dashboard");
+
+        await createNotification(
+          "Email verified",
+          "Your MIDOYOL account has been verified successfully."
+        );
+      } else {
+        alert(
+          "Your email is not verified yet. Please check your inbox."
+        );
+      }
+    } catch (error) {
+      console.error(error);
+      alert("Could not check verification status.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const logout = async () => {
+    try {
       await signOut(auth);
 
-      setShowPortal(false);
-
-      setSelectedField("");
-      setSelectedMajor("");
-      setShowFields(false);
-      setShowMajors(false);
-
+      setShowMobileMenu(false);
+      setShowNotifications(false);
+      setPage("home");
     } catch (error) {
-
       console.error(error);
-
     }
-
   };
 
+  /* ---------------------------------------------------------
+     APPLICATION NAVIGATION
+  --------------------------------------------------------- */
 
-  /* =========================
-     SELECT FIELD
-  ========================== */
-
-  const chooseField = (field) => {
-
-    setSelectedField(field);
-
-    setSelectedMajor("");
-
-    setShowFields(false);
-
-    setShowMajors(true);
-
-  };
-
-
-  /* =========================
-     SELECT MAJOR
-  ========================== */
-
-  const chooseMajor = (major) => {
-
-    setSelectedMajor(major);
-
-    setShowMajors(false);
-
-  };
-
-
-  /* =========================
-     APPLICATION
-  ========================== */
-
-  const handleApplication = () => {
-
+  const startApplication = async () => {
     if (!user) {
-
-      openLogin();
-
+      setIsRegister(true);
+      setShowAuth(true);
       return;
-
     }
 
+    if (!user.emailVerified) {
+      setPage("verify");
+      return;
+    }
 
-    setShowPortal(true);
+    await ensureApplication();
+
+    setPage("application");
+    setShowMobileMenu(false);
 
     window.scrollTo({
       top: 0,
       behavior: "smooth",
     });
-
   };
 
+  const goToDocuments = async () => {
+    if (!applicationId) {
+      await ensureApplication();
+    }
 
-  /* =========================
-     LANDING PAGE
-  ========================== */
+    setPage("documents");
 
-  if (!showPortal) {
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
+  };
 
+  /* ---------------------------------------------------------
+     PROGRESS
+  --------------------------------------------------------- */
+
+  const documentCount = documents.filter(
+    (item) => item.status === "uploaded"
+  ).length;
+
+  const documentsComplete =
+    documentCount >= REQUIRED_DOCUMENTS.length;
+
+  const chooseComplete =
+    Boolean(
+      application?.field &&
+        application?.specialization &&
+        application?.university
+    );
+
+  const progressStage = useMemo(() => {
+    if (!user || !user.emailVerified) return 1;
+
+    if (!chooseComplete) return 2;
+
+    if (!documentsComplete) return 3;
+
+    return 4;
+  }, [
+    user,
+    chooseComplete,
+    documentsComplete,
+  ]);
+
+  /* ---------------------------------------------------------
+     SUPPORT
+  --------------------------------------------------------- */
+
+  const submitSupport = async (subject, message) => {
+    if (!user) return;
+
+    if (!subject || !message) {
+      alert("Please complete the support form.");
+      return;
+    }
+
+    try {
+      setSaving(true);
+
+      await addDoc(collection(db, "supportTickets"), {
+        studentId: user.uid,
+        email: user.email || "",
+        subject,
+        message,
+        status: "open",
+        createdAt: serverTimestamp(),
+      });
+
+      await createNotification(
+        "Support request received",
+        "Your support request has been submitted successfully."
+      );
+
+      setShowSupport(false);
+
+      alert(
+        "Your support request has been submitted."
+      );
+    } catch (error) {
+      console.error(error);
+      alert("Could not submit your support request.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /* =========================================================
+     AUTH CHECKING
+  ========================================================= */
+
+  if (authChecking) {
     return (
+      <div className="loading-screen">
+        <div className="loading-logo">MIDOYOL</div>
+        <div className="spinner"></div>
+        <p>Loading your journey...</p>
+      </div>
+    );
+  }
 
-      <div className="landing-page">
+  /* =========================================================
+     VERIFY EMAIL
+  ========================================================= */
 
-        <div className="landing-logo-box">
+  if (user && page === "verify") {
+    return (
+      <VerificationScreen
+        user={user}
+        onResend={resendVerification}
+        onCheck={checkEmailVerification}
+        onLogout={logout}
+        loading={saving}
+      />
+    );
+  }
 
-          <div className="landing-logo">
-            MIDOYOL
+  /* =========================================================
+     HOME
+  ========================================================= */
+
+  if (!user || page === "home") {
+    return (
+      <>
+        <LandingPage
+          onLogin={() => {
+            setIsRegister(false);
+            setShowAuth(true);
+          }}
+          onRegister={() => {
+            setIsRegister(true);
+            setShowAuth(true);
+          }}
+          onStart={startApplication}
+        />
+
+        {showAuth && (
+          <AuthModal
+            isRegister={isRegister}
+            setIsRegister={setIsRegister}
+            onClose={() => setShowAuth(false)}
+            onRegister={handleRegister}
+            onLogin={handleLogin}
+            onResetPassword={handleResetPassword}
+            loading={saving}
+          />
+        )}
+      </>
+    );
+  }
+
+  /* =========================================================
+     PORTAL
+  ========================================================= */
+
+  return (
+    <div className="app-shell">
+      <Navbar
+        user={user}
+        page={page}
+        setPage={setPage}
+        onStartApplication={startApplication}
+        onLogout={logout}
+        darkMode={darkMode}
+        setDarkMode={setDarkMode}
+        showMobileMenu={showMobileMenu}
+        setShowMobileMenu={setShowMobileMenu}
+        notifications={notifications}
+        showNotifications={showNotifications}
+        setShowNotifications={setShowNotifications}
+        markNotificationRead={markNotificationRead}
+        onProgress={() => {
+          setPage("dashboard");
+          setShowMobileMenu(false);
+
+          setTimeout(() => {
+            document
+              .getElementById("progress-section")
+              ?.scrollIntoView({
+                behavior: "smooth",
+              });
+          }, 100);
+        }}
+        onPayments={() => {
+          setShowPaymentHistory(true);
+          setShowMobileMenu(false);
+        }}
+      />
+
+      <main>
+        {page === "dashboard" && (
+          <DashboardPage
+            user={user}
+            application={application}
+            applicationId={applicationId}
+            progressStage={progressStage}
+            documentCount={documentCount}
+            documentsComplete={documentsComplete}
+            chooseComplete={chooseComplete}
+            onStartApplication={startApplication}
+            onDocuments={goToDocuments}
+            onSupport={() => setShowSupport(true)}
+          />
+        )}
+
+        {page === "application" && (
+          <ApplicationPage
+            user={user}
+            application={application}
+            applicationId={applicationId}
+            saving={saving}
+            onSave={saveApplication}
+            onDocuments={goToDocuments}
+          />
+        )}
+
+        {page === "documents" && (
+          <DocumentsPage
+            applicationId={applicationId}
+            documents={documents}
+            saving={saving}
+            onUpload={uploadDocument}
+            onDelete={deleteDocument}
+            onBack={() => setPage("application")}
+            onPayment={() => setPage("payment")}
+          />
+        )}
+
+        {page === "payment" && (
+          <PaymentPage
+            applicationId={applicationId}
+            payments={payments}
+            saving={saving}
+            onCreatePayment={createPaymentRequest}
+            onReceipt={setShowReceipt}
+          />
+        )}
+      </main>
+
+      <Footer
+        onSupport={() => setShowSupport(true)}
+      />
+
+      {showPaymentHistory && (
+        <PaymentHistoryModal
+          payments={payments}
+          onClose={() => setShowPaymentHistory(false)}
+          onReceipt={setShowReceipt}
+        />
+      )}
+
+      {showReceipt && (
+        <ReceiptModal
+          payment={showReceipt}
+          onClose={() => setShowReceipt(null)}
+        />
+      )}
+
+      {showSupport && (
+        <SupportModal
+          onClose={() => setShowSupport(false)}
+          onSubmit={submitSupport}
+          loading={saving}
+        />
+      )}
+    </div>
+  );
+}
+
+/* =========================================================
+   LANDING PAGE
+========================================================= */
+
+function LandingPage({
+  onLogin,
+  onRegister,
+  onStart,
+}) {
+  return (
+    <div className="landing-page">
+      <header className="landing-header">
+        <div className="brand-box">MIDOYOL</div>
+
+        <div className="landing-actions">
+          <button
+            className="text-button"
+            onClick={onLogin}
+          >
+            Login
+          </button>
+
+          <button
+            className="primary-button small"
+            onClick={onRegister}
+          >
+            Sign Up
+          </button>
+        </div>
+      </header>
+
+      <section className="landing-hero">
+        <div className="hero-content">
+          <div className="hero-badge">
+            STUDY ABROAD MADE SIMPLE
           </div>
 
+          <h1>
+            Your Journey to
+            <span> University </span>
+            Starts Here.
+          </h1>
+
+          <p>
+            Apply to universities, organize your documents,
+            and follow your application journey — all in one
+            simple platform.
+          </p>
+
+          <div className="hero-price">
+            <strong>$1</strong>
+            <span>application fee</span>
+          </div>
+
+          <div className="hero-buttons">
+            <button
+              className="primary-button"
+              onClick={onStart}
+            >
+              Start Your Application
+              <span>→</span>
+            </button>
+
+            <button
+              className="secondary-button"
+              onClick={onRegister}
+            >
+              Create Account
+            </button>
+          </div>
+
+          <div className="hero-trust">
+            <span>✓ Simple process</span>
+            <span>✓ Student-focused</span>
+            <span>✓ One platform</span>
+          </div>
         </div>
 
+        <div className="globe-wrapper">
+          <div className="globe">
+            <div className="globe-line line-one"></div>
+            <div className="globe-line line-two"></div>
+            <div className="globe-line line-three"></div>
+            <div className="globe-shine"></div>
 
-        <div className="landing-content">
-
-          <div className="landing-left">
-
-            <div className="landing-small-title">
-              UNIVERSITY ADMISSION PLATFORM
-            </div>
-
-
-            <h1>
-
-              Your Journey to
-              <br />
-
-              <span>University</span>
-              <br />
-
-              Starts Here.
-
-            </h1>
-
-
-            <p>
-
-              Discover universities, choose
-              your major, and start your
-              university application through
-              MIDOYOL.
-
-            </p>
-
-
-            <div className="landing-fee">
-
-              Start your application for just
-
-              <strong>
-                $1
-              </strong>
-
-            </div>
-
-
-            <div className="landing-buttons">
-
-              <button
-                className="landing-auth-button"
-                onClick={openLogin}
-              >
-                LOG IN
-              </button>
-
-
-              <button
-                className="landing-auth-button"
-                onClick={openRegister}
-              >
-                SIGN UP
-              </button>
-
-            </div>
-
-
-            <div className="landing-note">
-
-              Simple. Easy. Built for
-              students worldwide.
-
-            </div>
-
-          </div>
-
-
-          <div className="globe-area">
-
-            <div className="globe-glow"></div>
-
-
-            <div className="globe">
-
-              <div className="globe-land land-one"></div>
-
-              <div className="globe-land land-two"></div>
-
-              <div className="globe-land land-three"></div>
-
-
-              <div className="globe-line line-one"></div>
-
-              <div className="globe-line line-two"></div>
-
-              <div className="globe-line line-three"></div>
-
-            </div>
-
-
-            <div className="flag flag-turkey">
+            <div className="globe-flag flag-tr">
               🇹🇷
             </div>
 
-            <div className="flag flag-sudan">
+            <div className="globe-flag flag-sd">
               🇸🇩
             </div>
 
-            <div className="flag flag-uk">
+            <div className="globe-flag flag-uk">
               🇬🇧
             </div>
 
-            <div className="flag flag-germany">
+            <div className="globe-flag flag-de">
               🇩🇪
             </div>
 
-            <div className="flag flag-brazil">
+            <div className="globe-flag flag-br">
               🇧🇷
             </div>
 
-            <div className="flag flag-saudi">
+            <div className="globe-flag flag-sa">
               🇸🇦
             </div>
-
-
-            <div className="globe-label">
-
-              STUDENTS AROUND THE WORLD
-
-            </div>
-
           </div>
+        </div>
+      </section>
 
+      <section className="landing-features">
+        <div>
+          <span>01</span>
+          <h3>Choose</h3>
+          <p>
+            Select your field, specialization and university.
+          </p>
         </div>
 
+        <div>
+          <span>02</span>
+          <h3>Prepare</h3>
+          <p>
+            Upload the documents needed for your application.
+          </p>
+        </div>
 
-        {showAuth && (
+        <div>
+          <span>03</span>
+          <h3>Track</h3>
+          <p>
+            Follow every stage of your application from one
+            dashboard.
+          </p>
+        </div>
+      </section>
 
-          <AuthModal
+      <footer className="landing-footer">
+        © {new Date().getFullYear()} MIDOYOL. All rights reserved.
+      </footer>
+    </div>
+  );
+}
 
-            isRegister={isRegister}
+/* =========================================================
+   VERIFICATION SCREEN
+========================================================= */
 
-            setIsRegister={setIsRegister}
+function VerificationScreen({
+  user,
+  onResend,
+  onCheck,
+  onLogout,
+  loading,
+}) {
+  return (
+    <div className="verification-page">
+      <div className="verification-card">
+        <div className="verification-icon">
+          ✉
+        </div>
 
-            closeAuth={closeAuth}
+        <div className="brand-box centered">
+          MIDOYOL
+        </div>
 
-            loading={loading}
+        <h1>Verify your email</h1>
 
-            message={message}
+        <p>
+          We sent a verification link to:
+        </p>
 
-            firstName={firstName}
-            setFirstName={setFirstName}
+        <strong className="verification-email">
+          {user.email}
+        </strong>
 
-            lastName={lastName}
-            setLastName={setLastName}
+        <p className="muted">
+          Open the email and click the verification link.
+          After that, come back here and tap the button below.
+        </p>
 
-            email={email}
-            setEmail={setEmail}
+        <button
+          className="primary-button full"
+          onClick={onCheck}
+          disabled={loading}
+        >
+          {loading
+            ? "Checking..."
+            : "I Verified My Email"}
+        </button>
 
-            dateOfBirth={dateOfBirth}
-            setDateOfBirth={setDateOfBirth}
+        <button
+          className="secondary-button full"
+          onClick={onResend}
+          disabled={loading}
+        >
+          Resend Verification Email
+        </button>
 
-            country={country}
-            setCountry={setCountry}
-
-            password={password}
-            setPassword={setPassword}
-
-            confirmPassword={confirmPassword}
-            setConfirmPassword={setConfirmPassword}
-
-            acceptedTerms={acceptedTerms}
-            setAcceptedTerms={setAcceptedTerms}
-
-            handleRegister={handleRegister}
-            handleLogin={handleLogin}
-            handleResetPassword={handleResetPassword}
-
-          />
-
-        )}
-
+        <button
+          className="link-button"
+          onClick={onLogout}
+        >
+          Sign out
+        </button>
       </div>
+    </div>
+  );
+}
 
-    );
+/* =========================================================
+   NAVBAR
+========================================================= */
 
-  }
-
-
-  /* =========================
-     STUDENT PORTAL
-  ========================== */
+function Navbar({
+  user,
+  page,
+  setPage,
+  onStartApplication,
+  onLogout,
+  darkMode,
+  setDarkMode,
+  showMobileMenu,
+  setShowMobileMenu,
+  notifications,
+  showNotifications,
+  setShowNotifications,
+  markNotificationRead,
+  onProgress,
+  onPayments,
+}) {
+  const unreadCount = notifications.filter(
+    (item) => !item.read
+  ).length;
 
   return (
-
-    <div className="app">
-
-
-      {/* NAVBAR */}
-
+    <>
       <nav className="navbar">
+        <button
+          className="nav-brand"
+          onClick={() => setPage("dashboard")}
+        >
+          MIDOYOL
+        </button>
 
-        <div className="container nav-content">
-
-          <div className="logo">
-            MIDOYOL
-          </div>
-
-
-          <div className="nav-links">
-
-            <a href="#home">
-              Home
-            </a>
-
-            <a href="#universities">
-              Universities
-            </a>
-
-            <a href="#study">
-              Study
-            </a>
-
-            <button
-              className="nav-login"
-              onClick={handleLogout}
-            >
-              Logout
-            </button>
-
-          </div>
-
+        <div className="desktop-nav-links">
+          <button
+            className={page === "dashboard" ? "active" : ""}
+            onClick={() => setPage("dashboard")}
+          >
+            Home
+          </button>
 
           <button
-            className="nav-button"
-            onClick={handleApplication}
+            onClick={() => {
+              setPage("dashboard");
+
+              setTimeout(() => {
+                document
+                  .getElementById("universities-section")
+                  ?.scrollIntoView({
+                    behavior: "smooth",
+                  });
+              }, 50);
+            }}
+          >
+            Universities
+          </button>
+
+          <button
+            onClick={() => {
+              setPage("application");
+              onStartApplication();
+            }}
+          >
+            Study
+          </button>
+        </div>
+
+        <div className="nav-right">
+          <button
+            className="notification-button"
+            onClick={() =>
+              setShowNotifications(!showNotifications)
+            }
+          >
+            ♧
+
+            {unreadCount > 0 && (
+              <span className="notification-count">
+                {unreadCount}
+              </span>
+            )}
+          </button>
+
+          <button
+            className="nav-start-button"
+            onClick={onStartApplication}
           >
             Start Application
           </button>
 
+          <button
+            className="hamburger"
+            onClick={() =>
+              setShowMobileMenu(!showMobileMenu)
+            }
+            aria-label="Menu"
+          >
+            <span></span>
+            <span></span>
+            <span></span>
+          </button>
         </div>
 
+        {showNotifications && (
+          <NotificationPanel
+            notifications={notifications}
+            onRead={markNotificationRead}
+            onClose={() => setShowNotifications(false)}
+          />
+        )}
       </nav>
 
+      {showMobileMenu && (
+        <MobileMenu
+          user={user}
+          darkMode={darkMode}
+          setDarkMode={setDarkMode}
+          onProgress={onProgress}
+          onPayments={onPayments}
+          onLogout={onLogout}
+          onClose={() => setShowMobileMenu(false)}
+        />
+      )}
+    </>
+  );
+}
 
-      {/* WELCOME */}
+/* =========================================================
+   MOBILE MENU
+========================================================= */
 
-      <section
-        className="student-welcome"
-        id="home"
-      >
-
-        <div className="container">
-
-          <div className="welcome-content">
-
-            <div>
-
-              <span className="hero-label">
-                STUDENT PORTAL
-              </span>
-
-              <h1>
-                Welcome to
-                <span> MIDOYOL</span>
-              </h1>
-
-              <p>
-                Choose your field and
-                specialization to begin
-                your university journey.
-              </p>
-
-            </div>
-
+function MobileMenu({
+  user,
+  darkMode,
+  setDarkMode,
+  onProgress,
+  onPayments,
+  onLogout,
+  onClose,
+}) {
+  return (
+    <div className="mobile-menu-overlay">
+      <aside className="mobile-menu">
+        <div className="mobile-menu-top">
+          <div className="mobile-menu-brand">
+            MIDOYOL
           </div>
 
+          <button
+            className="menu-close"
+            onClick={onClose}
+          >
+            ×
+          </button>
         </div>
 
-      </section>
+        <div className="mobile-user-card">
+          <div className="user-avatar">
+            {(user?.email || "S")
+              .charAt(0)
+              .toUpperCase()}
+          </div>
 
+          <div>
+            <small>Student Account</small>
+            <strong>{user?.email}</strong>
+          </div>
+        </div>
 
-      {/* STUDY CARD */}
+        <div className="mobile-menu-items">
+          <button
+            onClick={() => setDarkMode(!darkMode)}
+          >
+            <span>🌙</span>
 
-      <section
-        className="study-section"
-        id="study"
-      >
-
-        <div className="container">
-
-          <div className="study-card">
-
-            <div className="study-card-icon">
-              🎓
+            <div>
+              <strong>Dark Mode</strong>
+              <small>
+                {darkMode ? "On" : "Off"}
+              </small>
             </div>
-
-
-            <div className="study-card-title">
-              CHOOSE YOUR STUDY PATH
-            </div>
-
-
-            <h2>
-              Find Your Field
-            </h2>
-
-
-            <p className="study-description">
-              Select a field first, then
-              choose the specialization
-              you want to study.
-            </p>
-
-
-            {/* FIELD */}
-
-            <div className="study-step">
-
-              <div className="study-step-number">
-                01
-              </div>
-
-
-              <div className="study-step-content">
-
-                <label>
-                  Study Field
-                </label>
-
-
-                <button
-                  className="study-select-button"
-                  onClick={() =>
-                    setShowFields(!showFields)
-                  }
-                >
-
-                  <span>
-                    {selectedField ||
-                      "Choose Your Field"}
-                  </span>
-
-                  <span className="arrow">
-                    {showFields
-                      ? "⌃"
-                      : "⌄"}
-                  </span>
-
-                </button>
-
-
-                {showFields && (
-
-                  <div className="options-box">
-
-                    {Object.keys(
-                      studyFields
-                    ).map((field) => (
-
-                      <button
-                        key={field}
-                        className="option-button"
-                        onClick={() =>
-                          chooseField(field)
-                        }
-                      >
-                        {field}
-                      </button>
-
-                    ))}
-
-                  </div>
-
-                )}
-
-              </div>
-
-            </div>
-
-
-            {/* MAJOR */}
 
             <div
-              className={`study-step ${
-                !selectedField
-                  ? "disabled-step"
-                  : ""
+              className={`toggle ${
+                darkMode ? "on" : ""
               }`}
             >
-
-              <div className="study-step-number">
-                02
-              </div>
-
-
-              <div className="study-step-content">
-
-                <label>
-                  Specialization
-                </label>
-
-
-                <button
-                  className="study-select-button"
-                  disabled={!selectedField}
-                  onClick={() =>
-                    setShowMajors(!showMajors)
-                  }
-                >
-
-                  <span>
-
-                    {selectedMajor ||
-                      (
-                        selectedField
-                          ? "Choose Your Specialization"
-                          : "Choose a field first"
-                      )}
-
-                  </span>
-
-
-                  <span className="arrow">
-
-                    {showMajors
-                      ? "⌃"
-                      : "⌄"}
-
-                  </span>
-
-                </button>
-
-
-                {showMajors &&
-                  selectedField && (
-
-                    <div className="options-box">
-
-                      {studyFields[
-                        selectedField
-                      ].map((major) => (
-
-                        <button
-                          key={major}
-                          className="option-button"
-                          onClick={() =>
-                            chooseMajor(major)
-                          }
-                        >
-                          {major}
-                        </button>
-
-                      ))}
-
-                    </div>
-
-                  )}
-
-              </div>
-
+              <span></span>
             </div>
+          </button>
 
-
-            {/* CONTINUE */}
-
-            <button
-              className="continue-button"
-              disabled={!selectedMajor}
-              onClick={() => {
-
-                alert(
-                  `You selected ${selectedMajor}. The application process will start soon.`
-                );
-
-              }}
-            >
-
-              Continue
-
-              <span>
-                →
-              </span>
-
-            </button>
-
-
-            <div className="study-card-footer">
-
-              Secure student application
-              • MIDOYOL
-
-            </div>
-
-          </div>
-
-        </div>
-
-      </section>
-
-
-      {/* UNIVERSITIES */}
-
-      <section
-        className="universities"
-        id="universities"
-      >
-
-        <div className="container">
-
-          <div className="section-heading">
+          <button onClick={onProgress}>
+            <span>📊</span>
 
             <div>
+              <strong>Application Progress</strong>
+              <small>
+                View your current stage
+              </small>
+            </div>
 
-              <span className="small-title">
-                OUR UNIVERSITIES
+            <span>›</span>
+          </button>
+
+          <button onClick={onPayments}>
+            <span>💳</span>
+
+            <div>
+              <strong>Payments</strong>
+              <small>
+                Payment History & Receipts
+              </small>
+            </div>
+
+            <span>›</span>
+          </button>
+        </div>
+
+        <div className="mobile-menu-bottom">
+          <button
+            className="logout-menu-button"
+            onClick={onLogout}
+          >
+            <span>🚪</span>
+            Logout
+          </button>
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+/* =========================================================
+   NOTIFICATIONS
+========================================================= */
+
+function NotificationPanel({
+  notifications,
+  onRead,
+  onClose,
+}) {
+  return (
+    <div className="notification-panel">
+      <div className="panel-header">
+        <div>
+          <h3>Notifications</h3>
+          <p>Your latest MIDOYOL updates</p>
+        </div>
+
+        <button onClick={onClose}>×</button>
+      </div>
+
+      {notifications.length === 0 ? (
+        <div className="empty-panel">
+          <span>🔔</span>
+          <p>No notifications yet.</p>
+        </div>
+      ) : (
+        <div className="notification-list">
+          {notifications.slice(0, 8).map((item) => (
+            <button
+              className={`notification-item ${
+                item.read ? "" : "unread"
+              }`}
+              key={item.id}
+              onClick={() => onRead(item.id)}
+            >
+              <div className="notification-dot">
+                {item.read ? "✓" : "!"}
+              </div>
+
+              <div>
+                <strong>{item.title}</strong>
+
+                <p>{item.message}</p>
+
+                <small>
+                  {formatDateTime(item.createdAt)}
+                </small>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* =========================================================
+   DASHBOARD
+========================================================= */
+
+function DashboardPage({
+  user,
+  application,
+  applicationId,
+  progressStage,
+  documentCount,
+  documentsComplete,
+  chooseComplete,
+  onStartApplication,
+  onDocuments,
+  onSupport,
+}) {
+  return (
+    <div className="portal-page">
+      <section className="welcome-section">
+        <div>
+          <div className="eyebrow">
+            MIDOYOL STUDENT PORTAL
+          </div>
+
+          <h1>
+            Welcome back,
+            <span>
+              {" "}
+              {user.displayName?.split(" ")[0] ||
+                "Student"}
+            </span>
+          </h1>
+
+          <p>
+            Everything you need for your university journey,
+            organized in one place.
+          </p>
+        </div>
+
+        {applicationId && (
+          <div className="application-id-badge">
+            <small>APPLICATION ID</small>
+            <strong>{applicationId}</strong>
+          </div>
+        )}
+      </section>
+
+      <section id="progress-section">
+        <ProgressTracker
+          currentStage={progressStage}
+          documentsComplete={documentsComplete}
+          chooseComplete={chooseComplete}
+        />
+      </section>
+
+      <section className="dashboard-grid">
+        <div className="dashboard-main-card">
+          <div className="card-heading">
+            <div>
+              <span className="eyebrow">
+                YOUR APPLICATION
               </span>
 
               <h2>
-                Choose Your University
+                Continue your journey
               </h2>
-
             </div>
 
-          </div>
-
-
-          <div className="university-grid">
-
-            {universities.map(
-              (university) => (
-
-                <div
-                  className="university-card"
-                  key={university.name}
-                >
-
-                  <div className="university-image">
-                    🎓
-                  </div>
-
-
-                  <div className="university-info">
-
-                    <span className="location">
-                      📍 {university.location}
-                    </span>
-
-
-                    <h3>
-                      {university.name}
-                    </h3>
-
-
-                    <p>
-                      {university.programs}
-                    </p>
-
-
-                    <div className="scholarship">
-                      🎁 {university.scholarship}
-                    </div>
-
-
-                    <button
-                      className="apply-button"
-                      onClick={
-                        handleApplication
-                      }
-                    >
-                      View University →
-                    </button>
-
-                  </div>
-
-                </div>
-
-              )
-            )}
-
-          </div>
-
-        </div>
-
-      </section>
-
-
-      {/* HOW IT WORKS */}
-
-      <section
-        className="how-it-works"
-        id="how-it-works"
-      >
-
-        <div className="container">
-
-          <div className="section-center">
-
-            <span className="small-title">
-              SIMPLE PROCESS
+            <span className="save-indicator">
+              ● Auto Save
             </span>
-
-            <h2>
-              How MIDOYOL Works
-            </h2>
-
-            <p>
-              Choose. Apply. Track.
-            </p>
-
           </div>
 
+          <div className="dashboard-status">
+            <div>
+              <span className="status-icon">✓</span>
 
-          <div className="steps">
+              <div>
+                <strong>
+                  Registration
+                </strong>
 
-            <div className="step">
-
-              <div className="step-number">
-                01
+                <small>
+                  Account successfully created
+                </small>
               </div>
-
-              <h3>
-                Choose
-              </h3>
-
-              <p>
-                Find the field and
-                specialization that
-                fits you.
-              </p>
-
             </div>
 
+            <div>
+              <span className="status-icon blue">
+                {chooseComplete ? "✓" : "2"}
+              </span>
 
-            <div className="step">
+              <div>
+                <strong>
+                  University Selection
+                </strong>
 
-              <div className="step-number">
-                02
+                <small>
+                  {chooseComplete
+                    ? "Selection completed"
+                    : "Choose your study path"}
+                </small>
               </div>
-
-              <h3>
-                Apply
-              </h3>
-
-              <p>
-                Submit your information
-                and required documents.
-              </p>
-
             </div>
 
+            <div>
+              <span className="status-icon gray">
+                {documentsComplete ? "✓" : "3"}
+              </span>
 
-            <div className="step">
+              <div>
+                <strong>
+                  Documents
+                </strong>
 
-              <div className="step-number">
-                03
+                <small>
+                  {documentCount}/
+                  {REQUIRED_DOCUMENTS.length} documents uploaded
+                </small>
               </div>
-
-              <h3>
-                Track
-              </h3>
-
-              <p>
-                Follow your application
-                status.
-              </p>
-
             </div>
 
+            <div>
+              <span className="status-icon gray">
+                4
+              </span>
+
+              <div>
+                <strong>
+                  Payment
+                </strong>
+
+                <small>
+                  Coming Soon
+                </small>
+              </div>
+            </div>
           </div>
-
-        </div>
-
-      </section>
-
-
-      {/* CTA */}
-
-      <section className="cta">
-
-        <div className="container cta-content">
-
-          <div>
-
-            <span>
-              READY TO START?
-            </span>
-
-            <h2>
-              Start Your University Journey.
-            </h2>
-
-          </div>
-
 
           <button
             className="primary-button"
-            onClick={handleApplication}
+            onClick={onStartApplication}
           >
-            Start Application →
+            {chooseComplete
+              ? "Review Application"
+              : "Start Application"}
+            <span>→</span>
           </button>
-
         </div>
 
+        <div className="application-summary-card">
+          <span className="eyebrow">
+            APPLICATION SUMMARY
+          </span>
+
+          <h3>
+            {applicationId || "Not started"}
+          </h3>
+
+          <div className="summary-row">
+            <span>Field</span>
+            <strong>
+              {application?.field || "Not selected"}
+            </strong>
+          </div>
+
+          <div className="summary-row">
+            <span>Specialization</span>
+            <strong>
+              {application?.specialization ||
+                "Not selected"}
+            </strong>
+          </div>
+
+          <div className="summary-row">
+            <span>University</span>
+            <strong>
+              {application?.university ||
+                "Not selected"}
+            </strong>
+          </div>
+
+          <button
+            className="outline-button"
+            onClick={onDocuments}
+          >
+            Manage Documents
+          </button>
+        </div>
       </section>
 
+      <section
+        className="universities-section"
+        id="universities-section"
+      >
+        <div className="section-title">
+          <div>
+            <span className="eyebrow">
+              UNIVERSITY PARTNERS
+            </span>
 
-      {/* FOOTER */}
+            <h2>
+              Explore your options
+            </h2>
+          </div>
 
-      <footer>
+          <button
+            className="link-button"
+            onClick={onStartApplication}
+          >
+            Start application →
+          </button>
+        </div>
 
-        <div className="container footer-content">
+        <div className="university-grid">
+          {UNIVERSITIES.map((university, index) => (
+            <div
+              className="university-card"
+              key={university}
+            >
+              <div className="university-number">
+                0{index + 1}
+              </div>
+
+              <div className="university-logo">
+                {university
+                  .split(" ")
+                  .slice(0, 2)
+                  .map((word) => word[0])
+                  .join("")}
+              </div>
+
+              <h3>{university}</h3>
+
+              <p>
+                Explore programs and application options.
+              </p>
+
+              <button
+                onClick={onStartApplication}
+              >
+                View & Apply →
+              </button>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="how-section">
+        <div className="section-title centered-title">
+          <span className="eyebrow">
+            HOW IT WORKS
+          </span>
+
+          <h2>
+            Your journey in four simple stages
+          </h2>
+        </div>
+
+        <div className="how-grid">
+          <div>
+            <span>01</span>
+            <h3>Register</h3>
+            <p>
+              Create your secure student account.
+            </p>
+          </div>
 
           <div>
-
-            <div className="logo">
-              MIDOYOL
-            </div>
-
+            <span>02</span>
+            <h3>Choose</h3>
             <p>
-              Your journey to university
-              starts here.
+              Select your field, specialization and university.
             </p>
-
           </div>
 
+          <div>
+            <span>03</span>
+            <h3>Documents</h3>
+            <p>
+              Upload your required application documents.
+            </p>
+          </div>
+
+          <div>
+            <span>04</span>
+            <h3>Payment</h3>
+            <p>
+              Application fee payment gateway coming soon.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section className="support-cta">
+        <div>
+          <span className="eyebrow">
+            NEED HELP?
+          </span>
+
+          <h2>
+            We are here for your journey.
+          </h2>
 
           <p>
-            © 2026 MIDOYOL.
-            All rights reserved.
+            If you have a question about your application,
+            contact MIDOYOL support.
           </p>
-
         </div>
-
-      </footer>
-
-    </div>
-
-  );
-}
-
-
-/* =========================
-   AUTH MODAL
-========================= */
-
-function AuthModal({
-  isRegister,
-  setIsRegister,
-  closeAuth,
-  loading,
-  message,
-
-  firstName,
-  setFirstName,
-
-  lastName,
-  setLastName,
-
-  email,
-  setEmail,
-
-  dateOfBirth,
-  setDateOfBirth,
-
-  country,
-  setCountry,
-
-  password,
-  setPassword,
-
-  confirmPassword,
-  setConfirmPassword,
-
-  acceptedTerms,
-  setAcceptedTerms,
-
-  handleRegister,
-  handleLogin,
-  handleResetPassword,
-}) {
-
-  return (
-
-    <div className="login-overlay">
-
-      <div className="login-modal">
 
         <button
-          className="login-close"
-          onClick={closeAuth}
-          disabled={loading}
+          className="secondary-button"
+          onClick={onSupport}
         >
-          ×
+          Contact Support
         </button>
-
-
-        <div className="login-logo">
-          MIDOYOL
-        </div>
-
-
-        <h2>
-
-          {isRegister
-            ? "Create Your Account"
-            : "Welcome Back"}
-
-        </h2>
-
-
-        <p className="login-subtitle">
-
-          {isRegister
-            ? "Create your student account."
-            : "Login to continue your application."}
-
-        </p>
-
-
-        <form
-          onSubmit={
-            isRegister
-              ? handleRegister
-              : handleLogin
-          }
-        >
-
-
-          {isRegister && (
-            <>
-
-              <label>
-                First Name
-              </label>
-
-              <input
-                type="text"
-                placeholder="Enter your first name"
-                value={firstName}
-                onChange={(e) =>
-                  setFirstName(
-                    e.target.value
-                  )
-                }
-                autoComplete="given-name"
-              />
-
-
-              <label>
-                Last Name
-              </label>
-
-              <input
-                type="text"
-                placeholder="Enter your last name"
-                value={lastName}
-                onChange={(e) =>
-                  setLastName(
-                    e.target.value
-                  )
-                }
-                autoComplete="family-name"
-              />
-
-            </>
-          )}
-
-
-          <label>
-            Email
-          </label>
-
-          <input
-            type="email"
-            placeholder="Enter your email"
-            value={email}
-            onChange={(e) =>
-              setEmail(
-                e.target.value
-              )
-            }
-            autoComplete="email"
-          />
-
-
-          {isRegister && (
-            <>
-
-              <label>
-                Date of Birth
-              </label>
-
-              <input
-                type="date"
-                value={dateOfBirth}
-                onChange={(e) =>
-                  setDateOfBirth(
-                    e.target.value
-                  )
-                }
-              />
-
-
-              <label>
-                Country
-              </label>
-
-              <input
-                type="text"
-                placeholder="Enter your country"
-                value={country}
-                onChange={(e) =>
-                  setCountry(
-                    e.target.value
-                  )
-                }
-                autoComplete="country-name"
-              />
-
-            </>
-          )}
-
-
-          <label>
-            Password
-          </label>
-
-          <input
-            type="password"
-            placeholder="Enter your password"
-            value={password}
-            onChange={(e) =>
-              setPassword(
-                e.target.value
-              )
-            }
-            autoComplete={
-              isRegister
-                ? "new-password"
-                : "current-password"
-            }
-          />
-
-
-          {isRegister && (
-            <>
-
-              <label>
-                Confirm Password
-              </label>
-
-              <input
-                type="password"
-                placeholder="Confirm your password"
-                value={confirmPassword}
-                onChange={(e) =>
-                  setConfirmPassword(
-                    e.target.value
-                  )
-                }
-                autoComplete="new-password"
-              />
-
-
-              <label className="terms-label">
-
-                <input
-                  type="checkbox"
-                  checked={acceptedTerms}
-                  onChange={(e) =>
-                    setAcceptedTerms(
-                      e.target.checked
-                    )
-                  }
-                />
-
-                <span>
-                  I agree to the Terms &
-                  Privacy Policy.
-                </span>
-
-              </label>
-
-            </>
-          )}
-
-
-          <button
-            type="submit"
-            className="primary-button login-submit"
-            disabled={loading}
-          >
-
-            {loading
-              ? "Please wait..."
-              : isRegister
-              ? "Create Account"
-              : "Login"}
-
-          </button>
-
-        </form>
-
-
-        {!isRegister && (
-
-          <button
-            className="forgot-password"
-            onClick={
-              handleResetPassword
-            }
-            disabled={loading}
-          >
-            Forgot Password?
-          </button>
-
-        )}
-
-
-        {message && (
-
-          <div className="login-message">
-            {message}
-          </div>
-
-        )}
-
-
-        <div className="login-switch">
-
-          {isRegister
-            ? "Already have an account?"
-            : "Don't have an account?"}
-
-
-          <button
-            onClick={() => {
-
-              setIsRegister(
-                !isRegister
-              );
-
-            }}
-          >
-
-            {isRegister
-              ? " Login"
-              : " Create Account"}
-
-          </button>
-
-        </div>
-
-      </div>
-
+      </section>
     </div>
-
   );
-
 }
 
+/* =========================================================
+   PROGRESS TRACKER
+========================================================= */
 
-ReactDOM.createRoot(
-  document.getElementById("root")
-).render(
+function ProgressTracker({
+  currentStage,
+  documentsComplete,
+  chooseComplete,
+}) {
+  const stages = [
+    {
+      number: 1,
+      title: "Registration",
+      text: "Account",
+    },
+    {
+      number: 2,
+      title: "Choose",
+      text: "University",
+    },
+    {
+      number: 3,
+      title: "Documents",
+      text: "Upload",
+    },
+    {
+      number: 4,
+      title: "Payment",
+      text: "Coming Soon",
+    },
+  ];
 
-  <React.StrictMode>
+  return (
+    <div className="progress-card">
+      <div className="progress-header">
+        <div>
+          <span className="eyebrow">
+            APPLICATION PROGRESS
+          </span>
 
-    <App />
+          <h2>
+            Track your journey
+          </h2>
+        </div>
 
-  </React.StrictMode>
+        <span className="progress-stage-label">
+          Stage {currentStage} of 4
+        </span>
+      </div>
 
-);
+      <div className="progress-track">
+        {stages.map((stage, index) => {
+          const complete =
+            stage.number < currentStage ||
+            (stage.number === 2 &&
+              chooseComplete) ||
+            (stage.number === 3 &&
+              documentsComplete);
+
+          const active =
+            stage.number === currentStage &&
+            !complete;
+
+          return (
+            <React.Fragment key={stage.number}>
+              <div
+                className={`progress-step ${
+                  complete ? "complete" : ""
+                } ${active ? "active" : ""}`}
+              >
+                <div className="progress-circle">
+                  {complete ? "✓" : stage.number}
+                </div>
+
+                <div className="progress-step-text">
+                  <strong>{stage.title}</strong>
+                  <small>{stage.text}</small>
+                </div>
+              </div>
+
+              {index < stages.length - 1 && (
+                <div
+                  className={`progress-line ${
+                    stage.number < currentStage
+                      ? "complete"
+                      : ""
+                  }`}
+                ></div>
+              )}
+            </React.Fragment>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* =========================================================
+   APPLICATION PAGE
+========================================================= */
+
+function ApplicationPage({
+  application,
+  applicationId,
+  saving,
+  onSave,
+  onDocuments,
+}) {
+  const [selectedField, setSelectedField] = useState(
+    application?.field || ""
+  );
+
+  const [selectedMajor, setSelectedMajor] = useState(
+    application?.specialization || ""
+  );
+
+  const [selectedUniversity, setSelectedUniversity] =
+    useState(application?.university || "");
+
+  const [openField, setOpenField] = useState(false);
+  const [openMajor, setOpenMajor] = useState(false);
+  const [openUniversity, setOpenUniversity] =
+    useState(false);
+
+  useEffect(() => {
+    setSelectedField(application?.field || "");
+    setSelectedMajor(application?.specialization || "");
+    setSelectedUniversity(application?.university || "");
+  }, [application]);
+
+  useEffect(() => {
+    if (!applicationId) return;
+
+    const timer = setTimeout(() => {
+      onSave({
+        field: selectedField,
+        specialization: selectedMajor,
+        university: selectedUniversity,
+        stage:
+          selectedField &&
+          selectedMajor &&
+          selectedUniversity
+            ? "documents"
+            : "choose",
+      });
+    }, 600);
+
+    return () => clearTimeout(timer);
+  }, [
+    selectedField,
+    selectedMajor,
+    selectedUniversity,
+  ]);
+
+  const majors = selectedField
+    ? STUDY_FIELDS[selectedField] || []
+    : [];
+
+  const ready =
+    selectedField &&
+    selectedMajor &&
+    selectedUniversity;
+
+  const chooseField = (field) => {
+    setSelectedField(field);
+    setSelectedMajor("");
+    setSelectedUniversity("");
+    setOpenField(false);
+  };
+
+  const chooseMajor = (major) => {
+    setSelectedMajor(major);
+    setSelectedUniversity("");
+    setOpenMajor(false);
+  };
+
+  const chooseUniversity = (university) => {
+    setSelectedUniversity(university);
+    setOpenUniversity(false);
+  };
+
+  return (
+    <div className="inner-page">
+      <section className="inner-page-header">
+        <div>
+          <span className="eyebrow">
+            STEP 02 · CHOOSE
+          </span>
+
+          <h1>
+            Build your university path.
+          </h1>
+
+          <p>
+            Choose your field, specialization and preferred
+            university.
+          </p>
+        </div>
+
+        <div className="save-status">
+          <span className={saving ? "saving-dot" : ""}>
+            ●
+          </span>
+
+          {saving
+            ? "Saving..."
+            : "Your progress is saved"}
+        </div>
+      </section>
+
+      <ProgressTracker
+        currentStage={ready ? 2 : 2}
+        chooseComplete={Boolean(ready)}
+        documentsComplete={false}
+      />
+
+      <section className="application-layout">
+        <div className="application-form-card">
+          <div className="form-card-heading">
+            <span className="step-number">01</span>
+
+            <div>
+              <span className="eyebrow">
+                STUDY PATH
+              </span>
+
+              <h2>
+                Choose your field
+              </h2>
+
+              <p>
+                Start by selecting the area you want to study.
+              </p>
+            </div>
+          </div>
+
+          <div className="custom-select-wrapper">
+            <button
+              className={`custom-select ${
+                openField ? "opened" : ""
+              }`}
+              onClick={() => {
+                setOpenField(!openField);
+                setOpenMajor(false);
+                setOpenUniversity(false);
+              }}
+            >
+              <span>
+                {selectedField ||
+                  "Select your field"}
+              </span>
+
+              <span>⌄</span>
+            </button>
+
+            {openField && (
+              <div className="select-menu">
+                {Object.keys(STUDY_FIELDS).map(
+                  (field) => (
+                    <button
+                      key={field}
+                      onClick={() =>
+                        chooseField(field)
+                      }
+                    >
+                      <span>
+                        {field}
+                      </span>
+
+                      <small>
+                        {STUDY_FIELDS[field].length} programs
+                      </small>
+                    </button>
+                  )
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="form-card-heading second">
+            <span className="step-number">02</span>
+
+            <div>
+              <span className="eyebrow">
+                SPECIALIZATION
+              </span>
+
+              <h2>
+                Choose your specialization
+              </h2>
+
+              <p>
+                Select the program that matches your goals.
+              </p>
+            </div>
+          </div>
+
+          <div className="custom-select-wrapper">
+            <button
+              className={`custom-select ${
+                !selectedField ? "disabled" : ""
+              } ${openMajor ? "opened" : ""}`}
+              disabled={!selectedField}
+              onClick={() => {
+                setOpenMajor(!openMajor);
+                setOpenField(false);
+                setOpenUniversity(false);
+              }}
+            >
+              <span>
+                {selectedMajor ||
+                  (selectedField
+                    ? "Select specialization"
+                    : "Select a field first")}
+              </span>
+
+              <span>⌄</span>
+            </button>
+
+            {openMajor && selectedField && (
+              <div className="select-menu">
+                {majors.map((major) => (
+                  <button
+                    key={major}
+                    onClick={() =>
+                      chooseMajor(major)
+                    }
+                  >
+                    <span>{major}</span>
+                    <span>→</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="form-card-heading second">
+            <span className="step-number">03</span>
+
+            <div>
+              <span className="eyebrow">
+                UNIVERSITY
+              </span>
+
+              <h2>
+                Choose your university
+              </h2>
+
+              <p>
+                Select where you would like to apply.
+              </p>
+            </div>
+          </div>
+
+          <div className="custom-select-wrapper">
+            <button
+              className={`custom-select ${
+                !selectedMajor ? "disabled" : ""
+              } ${openUniversity ? "opened" : ""}`}
+             
