@@ -23,6 +23,7 @@ import {
   query,
   serverTimestamp,
   setDoc,
+  where,
 } from "firebase/firestore";
 
 import {
@@ -33,10 +34,6 @@ import {
 } from "firebase/storage";
 
 import { auth, db, storage } from "./firebase";
-
-/* =========================================================
-   MIDOYOL DATA
-========================================================= */
 
 const UNIVERSITIES = [
   "Istanbul Aydin University",
@@ -53,7 +50,6 @@ const STUDY_FIELDS = {
     "Physiotherapy",
     "Nutrition & Dietetics",
   ],
-
   Engineering: [
     "Civil Engineering",
     "Mechanical Engineering",
@@ -61,7 +57,6 @@ const STUDY_FIELDS = {
     "Industrial Engineering",
     "Architecture",
   ],
-
   "Computer Science & IT": [
     "Computer Engineering",
     "Software Engineering",
@@ -69,7 +64,6 @@ const STUDY_FIELDS = {
     "Information Technology",
     "Cyber Security",
   ],
-
   "Business & Economics": [
     "Business Administration",
     "International Business",
@@ -78,7 +72,6 @@ const STUDY_FIELDS = {
     "Accounting",
     "Marketing",
   ],
-
   "Law & Social Sciences": [
     "Law",
     "International Relations",
@@ -92,78 +85,86 @@ const REQUIRED_DOCUMENTS = [
   {
     id: "passport",
     title: "Passport / ID",
-    description: "Upload a clear copy of your passport or national ID.",
+    description:
+      "Upload a clear copy of your passport or national ID.",
     accept: ".pdf,.jpg,.jpeg,.png",
   },
   {
     id: "diploma",
     title: "High School Diploma",
-    description: "Upload your high school diploma or graduation certificate.",
+    description:
+      "Upload your high school diploma or graduation certificate.",
     accept: ".pdf,.jpg,.jpeg,.png",
   },
   {
     id: "transcript",
     title: "Academic Transcript",
-    description: "Upload your latest academic transcript.",
+    description:
+      "Upload your latest academic transcript.",
     accept: ".pdf,.jpg,.jpeg,.png",
   },
   {
     id: "photo",
     title: "Personal Photo",
-    description: "Upload a recent passport-style photo.",
+    description:
+      "Upload a recent passport-style photo.",
     accept: ".jpg,.jpeg,.png",
   },
 ];
 
-/* =========================================================
-   HELPERS
-========================================================= */
-
-const generateApplicationId = () => {
+function generateApplicationId() {
   const year = new Date().getFullYear();
-
-  const randomPart =
-    typeof crypto !== "undefined" && crypto.randomUUID
-      ? crypto.randomUUID().split("-")[0].toUpperCase()
-      : Math.random().toString(36).substring(2, 10).toUpperCase();
+  const randomPart = Math.random()
+    .toString(36)
+    .substring(2, 8)
+    .toUpperCase();
 
   return `MIDO-${year}-${randomPart}`;
-};
+}
 
-const formatDate = (value) => {
+function formatDate(value) {
   if (!value) return "—";
 
   try {
-    if (value?.toDate) {
-      return value.toDate().toLocaleDateString("en-US");
-    }
+    const date =
+      typeof value?.toDate === "function"
+        ? value.toDate()
+        : new Date(value);
 
-    return new Date(value).toLocaleDateString("en-US");
+    if (Number.isNaN(date.getTime())) return "—";
+
+    return date.toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
   } catch {
     return "—";
   }
-};
+}
 
-const formatDateTime = (value) => {
+function formatDateTime(value) {
   if (!value) return "—";
 
   try {
-    if (value?.toDate) {
-      return value.toDate().toLocaleString("en-US");
-    }
+    const date =
+      typeof value?.toDate === "function"
+        ? value.toDate()
+        : new Date(value);
 
-    return new Date(value).toLocaleString("en-US");
+    if (Number.isNaN(date.getTime())) return "—";
+
+    return date.toLocaleString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
   } catch {
     return "—";
   }
-};
-
-const sleep = (ms) =>
-  new Promise((resolve) => setTimeout(resolve, ms));
-
-/* =========================================================
-   APP
-========================================================= */
+}
 
 function App() {
   const [user, setUser] = useState(null);
@@ -172,19 +173,20 @@ function App() {
   const [page, setPage] = useState("home");
 
   const [showAuth, setShowAuth] = useState(false);
-  const [isRegister, setIsRegister] = useState(true);
+  const [isRegister, setIsRegister] = useState(false);
 
-  const [showMobileMenu, setShowMobileMenu] = useState(false);
-  const [showNotifications, setShowNotifications] = useState(false);
-  const [showPaymentHistory, setShowPaymentHistory] = useState(false);
-  const [showSupport, setShowSupport] = useState(false);
-  const [showReceipt, setShowReceipt] = useState(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [notificationOpen, setNotificationOpen] = useState(false);
+  const [paymentHistoryOpen, setPaymentHistoryOpen] =
+    useState(false);
+  const [supportOpen, setSupportOpen] = useState(false);
+  const [receiptPayment, setReceiptPayment] = useState(null);
 
   const [darkMode, setDarkMode] = useState(() => {
     return localStorage.getItem("midoyol-dark-mode") === "true";
   });
 
-  const [applicationId, setApplicationId] = useState("");
+  const [applicationId, setApplicationId] = useState(null);
   const [application, setApplication] = useState(null);
 
   const [documents, setDocuments] = useState([]);
@@ -193,43 +195,11 @@ function App() {
 
   const [saving, setSaving] = useState(false);
 
-  /* ---------------------------------------------------------
-     AUTH
-  --------------------------------------------------------- */
-
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
-      setAuthChecking(false);
-
-      if (!currentUser) {
-        setPage("home");
-        setApplicationId("");
-        setApplication(null);
-        setDocuments([]);
-        setPayments([]);
-        setNotifications([]);
-        return;
-      }
-
-      await loadStudentData(currentUser);
-
-      if (currentUser.emailVerified) {
-        setPage("dashboard");
-      } else {
-        setPage("verify");
-      }
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  /* ---------------------------------------------------------
-     DARK MODE
-  --------------------------------------------------------- */
-
-  useEffect(() => {
-    document.documentElement.classList.toggle("dark", darkMode);
+    document.documentElement.classList.toggle(
+      "dark",
+      darkMode
+    );
 
     localStorage.setItem(
       "midoyol-dark-mode",
@@ -237,73 +207,267 @@ function App() {
     );
   }, [darkMode]);
 
-  /* ---------------------------------------------------------
-     LOAD STUDENT
-  --------------------------------------------------------- */
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(
+      auth,
+      async (currentUser) => {
+        setAuthChecking(false);
 
-  const loadStudentData = async (currentUser) => {
+        if (!currentUser) {
+          setUser(null);
+          setApplicationId(null);
+          setApplication(null);
+          setDocuments([]);
+          setPayments([]);
+          setNotifications([]);
+          setPage("home");
+          return;
+        }
+
+        setUser(currentUser);
+
+        await loadStudentData(currentUser);
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
+
+  async function loadStudentData(currentUser) {
     try {
-      const studentRef = doc(db, "students", currentUser.uid);
+      const uid = currentUser.uid;
+
+      const studentRef = doc(db, "students", uid);
       const studentSnap = await getDoc(studentRef);
 
-      if (!studentSnap.exists()) {
-        await setDoc(
-          studentRef,
-          {
-            uid: currentUser.uid,
-            email: currentUser.email || "",
-            fullName: currentUser.displayName || "",
-            updatedAt: serverTimestamp(),
-          },
-          { merge: true }
-        );
+      let studentData;
 
-        return;
+      if (studentSnap.exists()) {
+        studentData = studentSnap.data();
+      } else {
+        studentData = {
+          uid,
+          email: currentUser.email || "",
+          displayName: currentUser.displayName || "",
+          createdAt: serverTimestamp(),
+        };
+
+        await setDoc(studentRef, studentData, {
+          merge: true,
+        });
       }
 
-      const studentData = studentSnap.data();
+      const currentApplicationId =
+        studentData?.currentApplicationId || null;
 
-      if (studentData.currentApplicationId) {
-        setApplicationId(studentData.currentApplicationId);
+      if (currentApplicationId) {
+        setApplicationId(currentApplicationId);
 
-        await loadApplication(
-          currentUser.uid,
-          studentData.currentApplicationId
-        );
+        await loadApplication(uid, currentApplicationId);
+        await loadDocuments(uid, currentApplicationId);
+        await loadPayments(uid);
+      } else {
+        setApplicationId(null);
+        setApplication(null);
+        setDocuments([]);
+        await loadPayments(uid);
       }
 
-      await loadNotifications(currentUser.uid);
-      await loadPayments(currentUser.uid);
+      await loadNotifications(uid);
 
-      if (studentData.currentApplicationId) {
-        await loadDocuments(
-          currentUser.uid,
-          studentData.currentApplicationId
-        );
+      if (currentUser.emailVerified) {
+        setPage("dashboard");
+      } else {
+        setPage("verify");
       }
     } catch (error) {
-      console.error("Load student error:", error);
+      console.error("Failed to load student data:", error);
     }
-  };
+  }
 
-  /* ---------------------------------------------------------
-     APPLICATION
-  --------------------------------------------------------- */
-
-  const loadApplication = async (uid, id) => {
+  async function loadApplication(uid, id) {
     try {
-      const applicationRef = doc(db, "applications", id);
+      const applicationRef = doc(
+        db,
+        "applications",
+        id
+      );
+
       const applicationSnap = await getDoc(applicationRef);
 
       if (applicationSnap.exists()) {
-        setApplication(applicationSnap.data());
+        setApplication({
+          id: applicationSnap.id,
+          ...applicationSnap.data(),
+        });
+      } else {
+        setApplication(null);
       }
     } catch (error) {
-      console.error("Load application error:", error);
+      console.error("Failed to load application:", error);
     }
-  };
+  }
 
-  const ensureApplication = async () => {
+  async function loadDocuments(uid, id) {
+    try {
+      const documentsRef = collection(
+        db,
+        "applications",
+        id,
+        "documents"
+      );
+
+      const snapshot = await getDocs(documentsRef);
+
+      const loadedDocuments = snapshot.docs.map((item) => ({
+        id: item.id,
+        ...item.data(),
+      }));
+
+      setDocuments(loadedDocuments);
+    } catch (error) {
+      console.error("Failed to load documents:", error);
+      setDocuments([]);
+    }
+  }
+
+  async function loadPayments(uid) {
+    try {
+      const paymentsRef = collection(db, "payments");
+
+      const q = query(
+        paymentsRef,
+        where("studentId", "==", uid)
+      );
+
+      const snapshot = await getDocs(q);
+
+      const loadedPayments = snapshot.docs
+        .map((item) => ({
+          id: item.id,
+          ...item.data(),
+        }))
+        .sort((a, b) => {
+          const aDate =
+            typeof a.createdAt?.toDate === "function"
+              ? a.createdAt.toDate().getTime()
+              : 0;
+
+          const bDate =
+            typeof b.createdAt?.toDate === "function"
+              ? b.createdAt.toDate().getTime()
+              : 0;
+
+          return bDate - aDate;
+        });
+
+      setPayments(loadedPayments);
+    } catch (error) {
+      console.error("Failed to load payments:", error);
+      setPayments([]);
+    }
+  }
+
+  async function loadNotifications(uid) {
+    try {
+      const notificationsRef = collection(
+        db,
+        "users",
+        uid,
+        "notifications"
+      );
+
+      const q = query(
+        notificationsRef,
+        orderBy("createdAt", "desc")
+      );
+
+      const snapshot = await getDocs(q);
+
+      const loadedNotifications = snapshot.docs.map(
+        (item) => ({
+          id: item.id,
+          ...item.data(),
+        })
+      );
+
+      setNotifications(loadedNotifications);
+    } catch (error) {
+      console.error(
+        "Failed to load notifications:",
+        error
+      );
+
+      setNotifications([]);
+    }
+  }
+
+  async function createNotification(title, message) {
+    if (!user) return;
+
+    try {
+      const notificationsRef = collection(
+        db,
+        "users",
+        user.uid,
+        "notifications"
+      );
+
+      await addDoc(notificationsRef, {
+        uid: user.uid,
+        title,
+        message,
+        read: false,
+        createdAt: serverTimestamp(),
+      });
+
+      await loadNotifications(user.uid);
+    } catch (error) {
+      console.error(
+        "Failed to create notification:",
+        error
+      );
+    }
+  }
+
+  async function markNotificationRead(notificationId) {
+    if (!user) return;
+
+    try {
+      const notificationRef = doc(
+        db,
+        "users",
+        user.uid,
+        "notifications",
+        notificationId
+      );
+
+      await setDoc(
+        notificationRef,
+        {
+          read: true,
+        },
+        {
+          merge: true,
+        }
+      );
+
+      setNotifications((current) =>
+        current.map((item) =>
+          item.id === notificationId
+            ? { ...item, read: true }
+            : item
+        )
+      );
+    } catch (error) {
+      console.error(
+        "Failed to mark notification read:",
+        error
+      );
+    }
+  }
+
+  async function ensureApplication() {
     if (!user) return null;
 
     if (applicationId && application) {
@@ -311,27 +475,35 @@ function App() {
     }
 
     try {
-      const studentRef = doc(db, "students", user.uid);
+      const studentRef = doc(
+        db,
+        "students",
+        user.uid
+      );
+
       const studentSnap = await getDoc(studentRef);
 
-      if (studentSnap.exists()) {
-        const data = studentSnap.data();
+      const studentData = studentSnap.exists()
+        ? studentSnap.data()
+        : {};
 
-        if (data.currentApplicationId) {
-          const existingId = data.currentApplicationId;
+      if (studentData.currentApplicationId) {
+        const existingId =
+          studentData.currentApplicationId;
 
-          setApplicationId(existingId);
+        setApplicationId(existingId);
 
-          await loadApplication(user.uid, existingId);
+        await loadApplication(user.uid, existingId);
+        await loadDocuments(user.uid, existingId);
 
-          return existingId;
-        }
+        return existingId;
       }
 
-      const newId = generateApplicationId();
+      const newApplicationId =
+        generateApplicationId();
 
-      const newApplication = {
-        applicationNumber: newId,
+      const applicationData = {
+        applicationNumber: newApplicationId,
         studentId: user.uid,
         email: user.email || "",
         stage: "choose",
@@ -349,97 +521,105 @@ function App() {
       };
 
       await setDoc(
-        doc(db, "applications", newId),
-        newApplication
+        doc(
+          db,
+          "applications",
+          newApplicationId
+        ),
+        applicationData
       );
 
       await setDoc(
         studentRef,
         {
-          currentApplicationId: newId,
+          uid: user.uid,
+          email: user.email || "",
+          currentApplicationId:
+            newApplicationId,
           updatedAt: serverTimestamp(),
         },
-        { merge: true }
+        {
+          merge: true,
+        }
       );
 
-      setApplicationId(newId);
-      setApplication(newApplication);
+      setApplicationId(newApplicationId);
+
+      setApplication({
+        id: newApplicationId,
+        ...applicationData,
+      });
+
+      setDocuments([]);
 
       await createNotification(
-        "Application started",
-        `Your MIDOYOL application ${newId} has been created.`
+        "Application created",
+        `Your application ${newApplicationId} is ready to complete.`
       );
 
-      return newId;
+      return newApplicationId;
     } catch (error) {
-      console.error("Create application error:", error);
-      alert("Could not create your application. Please try again.");
+      console.error(
+        "Failed to create application:",
+        error
+      );
+
+      alert(
+        error?.message ||
+          "Could not create your application."
+      );
+
       return null;
     }
-  };
+  }
 
-  const saveApplication = async (updates = {}) => {
+  async function saveApplication(updates) {
     if (!user || !applicationId) return;
 
     setSaving(true);
 
     try {
-      const updatedApplication = {
-        ...application,
-        ...updates,
-        updatedAt: serverTimestamp(),
-      };
+      const applicationRef = doc(
+        db,
+        "applications",
+        applicationId
+      );
 
       await setDoc(
-        doc(db, "applications", applicationId),
+        applicationRef,
         {
           ...updates,
           updatedAt: serverTimestamp(),
         },
-        { merge: true }
+        {
+          merge: true,
+        }
       );
 
-      setApplication(updatedApplication);
+      setApplication((current) => ({
+        ...(current || {}),
+        ...updates,
+      }));
     } catch (error) {
-      console.error("Save application error:", error);
+      console.error(
+        "Failed to save application:",
+        error
+      );
+
+      alert(
+        error?.message ||
+          "Could not save your application."
+      );
     } finally {
       setSaving(false);
     }
-  };
+  }
 
-  /* ---------------------------------------------------------
-     DOCUMENTS
-  --------------------------------------------------------- */
-
-  const loadDocuments = async (uid, appId) => {
-    try {
-      const documentsRef = collection(
-        db,
-        "applications",
-        appId,
-        "documents"
-      );
-
-      const snapshot = await getDocs(documentsRef);
-
-      const loaded = snapshot.docs.map((item) => ({
-        id: item.id,
-        ...item.data(),
-      }));
-
-      setDocuments(loaded);
-    } catch (error) {
-      console.error("Load documents error:", error);
-    }
-  };
-
-  const uploadDocument = async (documentType, file) => {
+  async function uploadDocument(documentType, file) {
     if (!user || !applicationId || !file) return;
 
-    const maxSize = 10 * 1024 * 1024;
-
-    if (file.size > maxSize) {
-      alert("File is too large. Maximum size is 10 MB.");
+    if (file.size > 10 * 1024 * 1024) {
+      alert("File size must be less than 10 MB.");
       return;
     }
 
@@ -450,137 +630,239 @@ function App() {
     ];
 
     if (!allowedTypes.includes(file.type)) {
-      alert("Please upload a PDF, JPG, JPEG, or PNG file.");
+      alert(
+        "Only PDF, JPG, JPEG and PNG files are allowed."
+      );
       return;
     }
 
     try {
       setSaving(true);
 
-      const storagePath = `students/${user.uid}/applications/${applicationId}/${documentType}/${file.name}`;
+      const fileRef = ref(
+        storage,
+        `students/${user.uid}/applications/${applicationId}/${documentType}/${file.name}`
+      );
 
-      const storageRef = ref(storage, storagePath);
-
-      await uploadBytes(storageRef, file, {
+      await uploadBytes(fileRef, file, {
         contentType: file.type,
       });
 
-      const downloadURL = await getDownloadURL(storageRef);
+      const downloadURL =
+        await getDownloadURL(fileRef);
+
+      const documentRef = doc(
+        db,
+        "applications",
+        applicationId,
+        "documents",
+        documentType
+      );
 
       await setDoc(
-        doc(
-          db,
-          "applications",
-          applicationId,
-          "documents",
-          documentType
-        ),
+        documentRef,
         {
           documentType,
           fileName: file.name,
           fileSize: file.size,
           contentType: file.type,
-          storagePath,
           downloadURL,
+          storagePath: fileRef.fullPath,
           status: "uploaded",
           uploadedAt: serverTimestamp(),
         },
-        { merge: true }
+        {
+          merge: true,
+        }
       );
 
-      await loadDocuments(user.uid, applicationId);
-
-      await createNotification(
-        "Document uploaded",
-        `${documentType} has been uploaded successfully.`
+      await loadDocuments(
+        user.uid,
+        applicationId
       );
-    } catch (error) {
-      console.error("Upload error:", error);
-      alert("Could not upload the document. Please try again.");
-    } finally {
-      setSaving(false);
-    }
-  };
 
-  const deleteDocument = async (documentItem) => {
-    if (!user || !applicationId || !documentItem?.storagePath) return;
+      const documentsSnapshot = await getDocs(
+        collection(
+          db,
+          "applications",
+          applicationId,
+          "documents"
+        )
+      );
 
-    const confirmed = window.confirm(
-      "Are you sure you want to remove this document?"
-    );
+      const uploadedIds =
+        documentsSnapshot.docs
+          .filter(
+            (item) =>
+              item.data()?.status === "uploaded"
+          )
+          .map((item) => item.id);
 
-    if (!confirmed) return;
-
-    try {
-      setSaving(true);
-
-      const storageRef = ref(storage, documentItem.storagePath);
-
-      await deleteObject(storageRef);
+      const complete =
+        REQUIRED_DOCUMENTS.every((item) =>
+          uploadedIds.includes(item.id)
+        );
 
       await setDoc(
         doc(
           db,
           "applications",
-          applicationId,
-          "documents",
-          documentItem.documentType
+          applicationId
         ),
         {
-          status: "missing",
-          fileName: "",
-          storagePath: "",
-          downloadURL: "",
+          documentsComplete: complete,
+          stage: complete ? "payment" : "documents",
           updatedAt: serverTimestamp(),
         },
-        { merge: true }
+        {
+          merge: true,
+        }
       );
 
-      await loadDocuments(user.uid, applicationId);
+      setApplication((current) => ({
+        ...(current || {}),
+        documentsComplete: complete,
+        stage: complete
+          ? "payment"
+          : "documents",
+      }));
+
+      await createNotification(
+        "Document uploaded",
+        `${file.name} has been uploaded successfully.`
+      );
     } catch (error) {
-      console.error("Delete document error:", error);
-      alert("Could not remove the document.");
+      console.error(
+        "Failed to upload document:",
+        error
+      );
+
+      alert(
+        error?.message ||
+          "Could not upload the document."
+      );
     } finally {
       setSaving(false);
     }
-  };
+  }
 
-  /* ---------------------------------------------------------
-     PAYMENTS
-  --------------------------------------------------------- */
-
-  const loadPayments = async (uid) => {
-    try {
-      const paymentsRef = collection(db, "payments");
-
-      const snapshot = await getDocs(paymentsRef);
-
-      const loaded = snapshot.docs
-        .map((item) => ({
-          id: item.id,
-          ...item.data(),
-        }))
-        .filter((payment) => payment.studentId === uid)
-        .sort((a, b) => {
-          const aDate = a.createdAt?.toDate?.() || 0;
-          const bDate = b.createdAt?.toDate?.() || 0;
-
-          return bDate - aDate;
-        });
-
-      setPayments(loaded);
-    } catch (error) {
-      console.error("Load payments error:", error);
-    }
-  };
-
-  const createPaymentRequest = async () => {
-    if (!user || !applicationId) return;
+  async function deleteDocument(documentItem) {
+    if (!user || !applicationId || !documentItem)
+      return;
 
     try {
       setSaving(true);
 
-      const paymentRef = await addDoc(collection(db, "payments"), {
+      if (documentItem.storagePath) {
+        try {
+          const fileRef = ref(
+            storage,
+            documentItem.storagePath
+          );
+
+          await deleteObject(fileRef);
+        } catch (storageError) {
+          console.warn(
+            "Storage file could not be deleted:",
+            storageError
+          );
+        }
+      }
+
+      const documentRef = doc(
+        db,
+        "applications",
+        applicationId,
+        "documents",
+        documentItem.id
+      );
+
+      await setDoc(
+        documentRef,
+        {
+          status: "missing",
+          fileName: "",
+          fileSize: 0,
+          downloadURL: "",
+          storagePath: "",
+          updatedAt: serverTimestamp(),
+        },
+        {
+          merge: true,
+        }
+      );
+
+      await loadDocuments(
+        user.uid,
+        applicationId
+      );
+
+      await setDoc(
+        doc(
+          db,
+          "applications",
+          applicationId
+        ),
+        {
+          documentsComplete: false,
+          stage: "documents",
+          updatedAt: serverTimestamp(),
+        },
+        {
+          merge: true,
+        }
+      );
+
+      setApplication((current) => ({
+        ...(current || {}),
+        documentsComplete: false,
+        stage: "documents",
+      }));
+
+      await createNotification(
+        "Document removed",
+        `${documentItem.title || documentItem.fileName || "Document"} was removed.`
+      );
+    } catch (error) {
+      console.error(
+        "Failed to delete document:",
+        error
+      );
+
+      alert(
+        error?.message ||
+          "Could not delete the document."
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function createPaymentRequest() {
+    if (!user || !applicationId) return;
+
+    const existingPending = payments.find(
+      (payment) =>
+        payment.applicationId === applicationId &&
+        payment.status === "pending"
+    );
+
+    if (existingPending) {
+      alert(
+        "You already have a pending payment request for this application."
+      );
+      return;
+    }
+
+    try {
+      setSaving(true);
+
+      const paymentsRef = collection(
+        db,
+        "payments"
+      );
+
+      await addDoc(paymentsRef, {
         studentId: user.uid,
         applicationId,
         type: "Application Fee",
@@ -594,353 +876,247 @@ function App() {
       await loadPayments(user.uid);
 
       await createNotification(
-        "Payment",
-        "Your $1 application fee payment request has been created. Payment gateway is coming soon."
+        "Payment request created",
+        "Your $1 application fee request is recorded. Online payment is coming soon."
       );
 
       alert(
-        `Payment request created.\n\nReference: ${paymentRef.id}\n\nThe payment gateway is coming soon.`
+        "Your payment request has been recorded. Online payment is coming soon."
       );
     } catch (error) {
-      console.error("Payment request error:", error);
-      alert("Could not create the payment request.");
+      console.error(
+        "Failed to create payment request:",
+        error
+      );
+
+      alert(
+        error?.message ||
+          "Could not create payment request."
+      );
     } finally {
       setSaving(false);
     }
-  };
+  }
 
-  /* ---------------------------------------------------------
-     NOTIFICATIONS
-  --------------------------------------------------------- */
-
-  const loadNotifications = async (uid) => {
+  async function handleRegister(formData) {
     try {
-      const notificationsRef = collection(
-        db,
-        "users",
-        uid,
-        "notifications"
-      );
+      if (
+        !formData.firstName ||
+        !formData.lastName ||
+        !formData.email ||
+        !formData.dateOfBirth ||
+        !formData.country ||
+        !formData.password ||
+        !formData.confirmPassword
+      ) {
+        alert("Please complete all required fields.");
+        return;
+      }
 
-      const q = query(
-        notificationsRef,
-        orderBy("createdAt", "desc")
-      );
+      if (
+        formData.password !==
+        formData.confirmPassword
+      ) {
+        alert("Passwords do not match.");
+        return;
+      }
 
-      const snapshot = await getDocs(q);
+      if (formData.password.length < 6) {
+        alert(
+          "Password must be at least 6 characters."
+        );
+        return;
+      }
 
-      const loaded = snapshot.docs.map((item) => ({
-        id: item.id,
-        ...item.data(),
-      }));
-
-      setNotifications(loaded);
-    } catch (error) {
-      console.error("Notifications error:", error);
-    }
-  };
-
-  const createNotification = async (title, message) => {
-    if (!user) return;
-
-    try {
-      await addDoc(
-        collection(db, "users", user.uid, "notifications"),
-        {
-          uid: user.uid,
-          title,
-          message,
-          read: false,
-          createdAt: serverTimestamp(),
-        }
-      );
-
-      await loadNotifications(user.uid);
-    } catch (error) {
-      console.error("Create notification error:", error);
-    }
-  };
-
-  const markNotificationRead = async (notificationId) => {
-    if (!user) return;
-
-    try {
-      await setDoc(
-        doc(
-          db,
-          "users",
-          user.uid,
-          "notifications",
-          notificationId
-        ),
-        {
-          read: true,
-        },
-        { merge: true }
-      );
-
-      await loadNotifications(user.uid);
-    } catch (error) {
-      console.error("Notification update error:", error);
-    }
-  };
-
-  /* ---------------------------------------------------------
-     AUTH FUNCTIONS
-  --------------------------------------------------------- */
-
-  const handleRegister = async (form) => {
-    const {
-      firstName,
-      lastName,
-      email,
-      dateOfBirth,
-      country,
-      password,
-      confirmPassword,
-      acceptedTerms,
-    } = form;
-
-    if (
-      !firstName ||
-      !lastName ||
-      !email ||
-      !dateOfBirth ||
-      !country ||
-      !password ||
-      !confirmPassword
-    ) {
-      alert("Please complete all required fields.");
-      return;
-    }
-
-    if (password.length < 6) {
-      alert("Password must contain at least 6 characters.");
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      alert("Passwords do not match.");
-      return;
-    }
-
-    if (!acceptedTerms) {
-      alert("Please accept the Terms & Privacy Policy.");
-      return;
-    }
-
-    try {
-      setSaving(true);
+      if (!formData.acceptedTerms) {
+        alert(
+          "Please accept the terms and conditions."
+        );
+        return;
+      }
 
       const credential =
         await createUserWithEmailAndPassword(
           auth,
-          email,
-          password
+          formData.email.trim(),
+          formData.password
         );
 
-      const newUser = credential.user;
-
-      await updateProfile(newUser, {
-        displayName: `${firstName} ${lastName}`,
+      await updateProfile(credential.user, {
+        displayName: `${formData.firstName.trim()} ${formData.lastName.trim()}`,
       });
 
       await setDoc(
-        doc(db, "students", newUser.uid),
+        doc(db, "students", credential.user.uid),
         {
-          uid: newUser.uid,
-          firstName,
-          lastName,
-          fullName: `${firstName} ${lastName}`,
-          email,
-          dateOfBirth,
-          country,
+          uid: credential.user.uid,
+          firstName: formData.firstName.trim(),
+          lastName: formData.lastName.trim(),
+          displayName: `${formData.firstName.trim()} ${formData.lastName.trim()}`,
+          email: formData.email.trim(),
+          dateOfBirth: formData.dateOfBirth,
+          country: formData.country,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         },
-        { merge: true }
+        {
+          merge: true,
+        }
       );
 
-      try {
-        await sendEmailVerification(newUser);
-      } catch (verificationError) {
-        console.error(
-          "Verification email error:",
-          verificationError
-        );
-      }
+      await sendEmailVerification(
+        credential.user
+      );
 
       setShowAuth(false);
+      setIsRegister(false);
       setPage("verify");
 
       alert(
-        "Account created successfully. Please check your email and verify your account."
+        "Account created. Please verify your email."
       );
     } catch (error) {
-      console.error(error);
+      console.error(
+        "Registration error:",
+        error
+      );
 
-      if (error.code === "auth/email-already-in-use") {
-        alert("This email is already registered.");
-      } else if (error.code === "auth/invalid-email") {
-        alert("Please enter a valid email address.");
-      } else if (error.code === "auth/weak-password") {
-        alert("Password is too weak.");
-      } else {
-        alert(
-          error.message ||
-            "Could not create your account."
-        );
-      }
-    } finally {
-      setSaving(false);
+      alert(
+        error?.message ||
+          "Could not create your account."
+      );
     }
-  };
+  }
 
-  const handleLogin = async (email, password) => {
-    if (!email || !password) {
-      alert("Please enter your email and password.");
-      return;
-    }
-
+  async function handleLogin(email, password) {
     try {
-      setSaving(true);
-
       const credential =
         await signInWithEmailAndPassword(
           auth,
-          email,
+          email.trim(),
           password
         );
 
-      const loggedUser = credential.user;
-
-      await reload(loggedUser);
-
-      if (!auth.currentUser.emailVerified) {
-        setShowAuth(false);
-        setPage("verify");
-        return;
-      }
-
-      await loadStudentData(loggedUser);
+      await reload(credential.user);
 
       setShowAuth(false);
-      setPage("dashboard");
-    } catch (error) {
-      console.error(error);
 
-      if (
-        error.code === "auth/invalid-credential" ||
-        error.code === "auth/wrong-password"
-      ) {
-        alert("Email or password is incorrect.");
-      } else if (error.code === "auth/user-not-found") {
-        alert("No account was found with this email.");
+      if (credential.user.emailVerified) {
+        await loadStudentData(credential.user);
+        setPage("dashboard");
       } else {
-        alert(
-          error.message ||
-            "Could not sign you in."
-        );
+        setPage("verify");
       }
-    } finally {
-      setSaving(false);
-    }
-  };
+    } catch (error) {
+      console.error("Login error:", error);
 
-  const handleResetPassword = async (email) => {
-    if (!email) {
-      alert("Enter your email address first.");
+      alert(
+        error?.message ||
+          "Could not sign in."
+      );
+    }
+  }
+
+  async function handleResetPassword(email) {
+    if (!email?.trim()) {
+      alert("Enter your email first.");
       return;
     }
 
     try {
-      await sendPasswordResetEmail(auth, email);
+      await sendPasswordResetEmail(
+        auth,
+        email.trim()
+      );
 
       alert(
-        "Password reset email sent. Please check your inbox."
+        "Password reset email sent. Check your inbox."
       );
     } catch (error) {
-      console.error(error);
+      console.error(
+        "Password reset error:",
+        error
+      );
 
       alert(
-        error.message ||
-          "Could not send the password reset email."
+        error?.message ||
+          "Could not send password reset email."
       );
     }
-  };
+  }
 
-  const resendVerification = async () => {
+  async function resendVerification() {
     if (!auth.currentUser) return;
 
     try {
-      await sendEmailVerification(auth.currentUser);
+      await sendEmailVerification(
+        auth.currentUser
+      );
 
       alert(
-        "Verification email sent again. Please check your inbox."
+        "Verification email sent again."
       );
     } catch (error) {
-      console.error(error);
+      console.error(
+        "Resend verification error:",
+        error
+      );
 
-      if (error.code === "auth/too-many-requests") {
-        alert(
-          "Too many requests. Please wait a little before trying again."
-        );
-      } else {
-        alert(
-          error.message ||
-            "Could not send the verification email."
-        );
-      }
+      alert(
+        error?.message ||
+          "Could not resend verification email."
+      );
     }
-  };
+  }
 
-  const checkEmailVerification = async () => {
+  async function checkEmailVerification() {
     if (!auth.currentUser) return;
 
     try {
-      setSaving(true);
-
       await reload(auth.currentUser);
 
-      if (auth.currentUser.emailVerified) {
-        await loadStudentData(auth.currentUser);
+      const refreshedUser = auth.currentUser;
 
+      setUser({
+        ...refreshedUser,
+      });
+
+      if (refreshedUser.emailVerified) {
+        await loadStudentData(refreshedUser);
         setPage("dashboard");
-
-        await createNotification(
-          "Email verified",
-          "Your MIDOYOL account has been verified successfully."
-        );
       } else {
         alert(
-          "Your email is not verified yet. Please check your inbox."
+          "Your email is not verified yet."
         );
       }
     } catch (error) {
-      console.error(error);
-      alert("Could not check verification status.");
-    } finally {
-      setSaving(false);
+      console.error(
+        "Verification check error:",
+        error
+      );
     }
-  };
+  }
 
-  const logout = async () => {
+  async function logout() {
     try {
       await signOut(auth);
 
-      setShowMobileMenu(false);
-      setShowNotifications(false);
+      setMobileMenuOpen(false);
+      setNotificationOpen(false);
+      setPaymentHistoryOpen(false);
+      setSupportOpen(false);
+      setReceiptPayment(null);
+      setShowAuth(false);
       setPage("home");
     } catch (error) {
-      console.error(error);
+      console.error(
+        "Logout error:",
+        error
+      );
     }
-  };
+  }
 
-  /* ---------------------------------------------------------
-     APPLICATION NAVIGATION
-  --------------------------------------------------------- */
-
-  const startApplication = async () => {
+  async function startApplication() {
     if (!user) {
       setIsRegister(true);
       setShowAuth(true);
@@ -952,50 +1128,81 @@ function App() {
       return;
     }
 
-    await ensureApplication();
+    const id = await ensureApplication();
 
-    setPage("application");
-    setShowMobileMenu(false);
+    if (id) {
+      setPage("application");
+    }
+  }
 
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth",
-    });
-  };
-
-  const goToDocuments = async () => {
-    if (!applicationId) {
-      await ensureApplication();
+  async function goToDocuments() {
+    if (!user) {
+      setIsRegister(true);
+      setShowAuth(true);
+      return;
     }
 
-    setPage("documents");
+    const id = await ensureApplication();
 
-    window.scrollTo({
-      top: 0,
-      behavior: "smooth",
-    });
-  };
+    if (id) {
+      await loadDocuments(user.uid, id);
+      setPage("documents");
+    }
+  }
 
-  /* ---------------------------------------------------------
-     PROGRESS
-  --------------------------------------------------------- */
+  async function goToPayment() {
+    if (!user) return;
 
-  const documentCount = documents.filter(
-    (item) => item.status === "uploaded"
-  ).length;
+    const id = await ensureApplication();
+
+    if (id) {
+      await loadPayments(user.uid);
+      setPage("payment");
+    }
+  }
+
+  function openProgress() {
+    setMobileMenuOpen(false);
+    setPage("dashboard");
+
+    setTimeout(() => {
+      document
+        .getElementById("progress-section")
+        ?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+    }, 100);
+  }
+
+  function openPayments() {
+    setMobileMenuOpen(false);
+    setPaymentHistoryOpen(true);
+  }
+
+  function openSupport() {
+    setMobileMenuOpen(false);
+    setSupportOpen(true);
+  }
+
+  const documentCount = useMemo(() => {
+    return documents.filter(
+      (item) => item.status === "uploaded"
+    ).length;
+  }, [documents]);
+
+  const chooseComplete = Boolean(
+    application?.field &&
+      application?.specialization &&
+      application?.university
+  );
 
   const documentsComplete =
-    documentCount >= REQUIRED_DOCUMENTS.length;
-
-  const chooseComplete =
-    Boolean(
-      application?.field &&
-        application?.specialization &&
-        application?.university
-    );
+    documentCount >=
+    REQUIRED_DOCUMENTS.length;
 
   const progressStage = useMemo(() => {
-    if (!user || !user.emailVerified) return 1;
+    if (!user?.emailVerified) return 1;
 
     if (!chooseComplete) return 2;
 
@@ -1008,85 +1215,51 @@ function App() {
     documentsComplete,
   ]);
 
-  /* ---------------------------------------------------------
-     SUPPORT
-  --------------------------------------------------------- */
-
-  const submitSupport = async (subject, message) => {
-    if (!user) return;
-
-    if (!subject || !message) {
-      alert("Please complete the support form.");
-      return;
-    }
-
-    try {
-      setSaving(true);
-
-      await addDoc(collection(db, "supportTickets"), {
-        studentId: user.uid,
-        email: user.email || "",
-        subject,
-        message,
-        status: "open",
-        createdAt: serverTimestamp(),
-      });
-
-      await createNotification(
-        "Support request received",
-        "Your support request has been submitted successfully."
-      );
-
-      setShowSupport(false);
-
-      alert(
-        "Your support request has been submitted."
-      );
-    } catch (error) {
-      console.error(error);
-      alert("Could not submit your support request.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  /* =========================================================
-     AUTH CHECKING
-  ========================================================= */
-
   if (authChecking) {
-    return (
-      <div className="loading-screen">
-        <div className="loading-logo">MIDOYOL</div>
-        <div className="spinner"></div>
-        <p>Loading your journey...</p>
-      </div>
-    );
+    return <LoadingScreen />;
   }
 
-  /* =========================================================
-     VERIFY EMAIL
-  ========================================================= */
-
-  if (user && page === "verify") {
+  if (page === "verify" && user) {
     return (
       <VerificationScreen
         user={user}
-        onResend={resendVerification}
         onCheck={checkEmailVerification}
+        onResend={resendVerification}
         onLogout={logout}
-        loading={saving}
       />
     );
   }
 
-  /* =========================================================
-     HOME
-  ========================================================= */
+  return (
+    <div className="app-shell">
+      {user && user.emailVerified && (
+        <Navbar
+          user={user}
+          darkMode={darkMode}
+          onToggleDark={() =>
+            setDarkMode((current) => !current)
+          }
+          onHome={() => setPage("dashboard")}
+          onStartApplication={startApplication}
+          onProgress={openProgress}
+          onPayments={openPayments}
+          onSupport={openSupport}
+          onLogout={logout}
+          notificationOpen={notificationOpen}
+          setNotificationOpen={
+            setNotificationOpen
+          }
+          notifications={notifications}
+          onMarkNotificationRead={
+            markNotificationRead
+          }
+          onOpenMobile={() =>
+            setMobileMenuOpen(true)
+          }
+        />
+      )}
 
-  if (!user || page === "home") {
-    return (
-      <>
+      {page === "home" && !user && (
         <LandingPage
           onLogin={() => {
             setIsRegister(false);
@@ -1098,143 +1271,220 @@ function App() {
           }}
           onStart={startApplication}
         />
+      )}
 
-        {showAuth && (
-          <AuthModal
-            isRegister={isRegister}
-            setIsRegister={setIsRegister}
-            onClose={() => setShowAuth(false)}
-            onRegister={handleRegister}
-            onLogin={handleLogin}
-            onResetPassword={handleResetPassword}
-            loading={saving}
-          />
-        )}
-      </>
-    );
-  }
-
-  /* =========================================================
-     PORTAL
-  ========================================================= */
-
-  return (
-    <div className="app-shell">
-      <Navbar
-        user={user}
-        page={page}
-        setPage={setPage}
-        onStartApplication={startApplication}
-        onLogout={logout}
-        darkMode={darkMode}
-        setDarkMode={setDarkMode}
-        showMobileMenu={showMobileMenu}
-        setShowMobileMenu={setShowMobileMenu}
-        notifications={notifications}
-        showNotifications={showNotifications}
-        setShowNotifications={setShowNotifications}
-        markNotificationRead={markNotificationRead}
-        onProgress={() => {
-          setPage("dashboard");
-          setShowMobileMenu(false);
-
-          setTimeout(() => {
-            document
-              .getElementById("progress-section")
-              ?.scrollIntoView({
-                behavior: "smooth",
-              });
-          }, 100);
-        }}
-        onPayments={() => {
-          setShowPaymentHistory(true);
-          setShowMobileMenu(false);
-        }}
-      />
-
-      <main>
-        {page === "dashboard" && (
+      {page === "dashboard" &&
+        user &&
+        user.emailVerified && (
           <DashboardPage
             user={user}
             application={application}
             applicationId={applicationId}
+            documents={documents}
+            payments={payments}
             progressStage={progressStage}
             documentCount={documentCount}
-            documentsComplete={documentsComplete}
-            chooseComplete={chooseComplete}
-            onStartApplication={startApplication}
+            onStartApplication={
+              startApplication
+            }
             onDocuments={goToDocuments}
-            onSupport={() => setShowSupport(true)}
+            onPayment={goToPayment}
+            onSupport={openSupport}
           />
         )}
 
-        {page === "application" && (
+      {page === "application" &&
+        user &&
+        user.emailVerified && (
           <ApplicationPage
-            user={user}
             application={application}
             applicationId={applicationId}
             saving={saving}
             onSave={saveApplication}
             onDocuments={goToDocuments}
+            progressStage={progressStage}
           />
         )}
 
-        {page === "documents" && (
+      {page === "documents" &&
+        user &&
+        user.emailVerified && (
           <DocumentsPage
+            application={application}
             applicationId={applicationId}
             documents={documents}
+            documentCount={documentCount}
             saving={saving}
+            progressStage={progressStage}
             onUpload={uploadDocument}
             onDelete={deleteDocument}
-            onBack={() => setPage("application")}
-            onPayment={() => setPage("payment")}
+            onPayment={goToPayment}
+            onBack={() =>
+              setPage("application")
+            }
           />
         )}
 
-        {page === "payment" && (
+      {page === "payment" &&
+        user &&
+        user.emailVerified && (
           <PaymentPage
+            user={user}
+            application={application}
             applicationId={applicationId}
             payments={payments}
             saving={saving}
-            onCreatePayment={createPaymentRequest}
-            onReceipt={setShowReceipt}
+            progressStage={progressStage}
+            onCreatePayment={
+              createPaymentRequest
+            }
+            onBack={() =>
+              setPage("documents")
+            }
+            onReceipt={setReceiptPayment}
           />
         )}
-      </main>
 
-      <Footer
-        onSupport={() => setShowSupport(true)}
-      />
+      {user && user.emailVerified && (
+        <Footer onSupport={openSupport} />
+      )}
 
-      {showPaymentHistory && (
+      {!user && page === "home" && (
+        <Footer
+          onSupport={() => {
+            setIsRegister(false);
+            setShowAuth(true);
+          }}
+        />
+      )}
+
+      {mobileMenuOpen && user && (
+        <MobileMenu
+          user={user}
+          darkMode={darkMode}
+          onToggleDark={() =>
+            setDarkMode((current) => !current)
+          }
+          onProgress={openProgress}
+          onPayments={openPayments}
+          onSupport={openSupport}
+          onLogout={logout}
+          onClose={() =>
+            setMobileMenuOpen(false)
+          }
+        />
+      )}
+
+      {showAuth && (
+        <AuthModal
+          isRegister={isRegister}
+          onClose={() =>
+            setShowAuth(false)
+          }
+          onSwitch={() =>
+            setIsRegister((current) => !current)
+          }
+          onLogin={handleLogin}
+          onRegister={handleRegister}
+          onResetPassword={
+            handleResetPassword
+          }
+        />
+      )}
+
+      {paymentHistoryOpen && (
         <PaymentHistoryModal
           payments={payments}
-          onClose={() => setShowPaymentHistory(false)}
-          onReceipt={setShowReceipt}
+          applicationId={applicationId}
+          onClose={() =>
+            setPaymentHistoryOpen(false)
+          }
+          onReceipt={setReceiptPayment}
+          onPayment={() => {
+            setPaymentHistoryOpen(false);
+            goToPayment();
+          }}
         />
       )}
 
-      {showReceipt && (
+      {receiptPayment && (
         <ReceiptModal
-          payment={showReceipt}
-          onClose={() => setShowReceipt(null)}
+          payment={receiptPayment}
+          user={user}
+          applicationId={applicationId}
+          onClose={() =>
+            setReceiptPayment(null)
+          }
         />
       )}
 
-      {showSupport && (
+      {supportOpen && (
         <SupportModal
-          onClose={() => setShowSupport(false)}
-          onSubmit={submitSupport}
-          loading={saving}
+          user={user}
+          onClose={() =>
+            setSupportOpen(false)
+          }
+          onSubmit={async (
+            subject,
+            message
+          ) => {
+            if (!user) return;
+
+            try {
+              await addDoc(
+                collection(
+                  db,
+                  "supportTickets"
+                ),
+                {
+                  studentId: user.uid,
+                  email:
+                    user.email || "",
+                  subject,
+                  message,
+                  status: "open",
+                  createdAt:
+                    serverTimestamp(),
+                }
+              );
+
+              await createNotification(
+                "Support request sent",
+                "Your support request has been received."
+              );
+
+              setSupportOpen(false);
+
+              alert(
+                "Your support request has been sent."
+              );
+            } catch (error) {
+              console.error(
+                "Support error:",
+                error
+              );
+
+              alert(
+                error?.message ||
+                  "Could not send your support request."
+              );
+            }
+          }}
         />
       )}
     </div>
   );
 }
 
-/* =========================================================
-   LANDING PAGE
-========================================================= */
+function LoadingScreen() {
+  return (
+    <div className="loading-screen">
+      <div className="loading-logo">M</div>
+      <div className="loading-spinner" />
+      <p>Loading MIDOYOL...</p>
+    </div>
+  );
+}
 
 function LandingPage({
   onLogin,
@@ -1242,11 +1492,13 @@ function LandingPage({
   onStart,
 }) {
   return (
-    <div className="landing-page">
+    <main className="landing-page">
       <header className="landing-header">
-        <div className="brand-box">MIDOYOL</div>
+        <div className="brand-box">
+          <span>MIDOYOL</span>
+        </div>
 
-        <div className="landing-actions">
+        <div className="landing-auth-buttons">
           <button
             className="text-button"
             onClick={onLogin}
@@ -1263,22 +1515,21 @@ function LandingPage({
         </div>
       </header>
 
-      <section className="landing-hero">
+      <section className="hero-section">
         <div className="hero-content">
-          <div className="hero-badge">
-            STUDY ABROAD MADE SIMPLE
+          <div className="eyebrow">
+            YOUR UNIVERSITY JOURNEY
           </div>
 
           <h1>
-            Your Journey to
-            <span> University </span>
-            Starts Here.
+            Your Journey to University
+            <span> Starts Here.</span>
           </h1>
 
           <p>
-            Apply to universities, organize your documents,
-            and follow your application journey — all in one
-            simple platform.
+            MIDOYOL makes your university
+            application journey simple,
+            organized, and easy to track.
           </p>
 
           <div className="hero-price">
@@ -1286,13 +1537,12 @@ function LandingPage({
             <span>application fee</span>
           </div>
 
-          <div className="hero-buttons">
+          <div className="hero-actions">
             <button
               className="primary-button"
               onClick={onStart}
             >
               Start Your Application
-              <span>→</span>
             </button>
 
             <button
@@ -1304,24 +1554,25 @@ function LandingPage({
           </div>
 
           <div className="hero-trust">
-            <span>✓ Simple process</span>
-            <span>✓ Student-focused</span>
-            <span>✓ One platform</span>
+            <span>✓ Simple application</span>
+            <span>✓ Secure documents</span>
+            <span>✓ Track your progress</span>
           </div>
         </div>
 
-        <div className="globe-wrapper">
-          <div className="globe">
-            <div className="globe-line line-one"></div>
-            <div className="globe-line line-two"></div>
-            <div className="globe-line line-three"></div>
-            <div className="globe-shine"></div>
+        <div className="hero-visual">
+          <div className="globe-container">
+            <div className="globe">
+              <div className="globe-line horizontal" />
+              <div className="globe-line vertical" />
+              <div className="globe-shape" />
+            </div>
 
-            <div className="globe-flag flag-tr">
+            <div className="globe-flag flag-turkey">
               🇹🇷
             </div>
 
-            <div className="globe-flag flag-sd">
+            <div className="globe-flag flag-sudan">
               🇸🇩
             </div>
 
@@ -1329,347 +1580,450 @@ function LandingPage({
               🇬🇧
             </div>
 
-            <div className="globe-flag flag-de">
+            <div className="globe-flag flag-germany">
               🇩🇪
             </div>
 
-            <div className="globe-flag flag-br">
+            <div className="globe-flag flag-brazil">
               🇧🇷
             </div>
 
-            <div className="globe-flag flag-sa">
+            <div className="globe-flag flag-saudi">
               🇸🇦
             </div>
           </div>
         </div>
       </section>
 
-      <section className="landing-features">
-        <div>
-          <span>01</span>
-          <h3>Choose</h3>
+      <section className="features-section">
+        <div className="section-heading">
+          <span>WHY MIDOYOL</span>
+          <h2>Everything in one place.</h2>
           <p>
-            Select your field, specialization and university.
+            From your first application step
+            to document preparation and
+            progress tracking.
           </p>
         </div>
 
-        <div>
-          <span>02</span>
-          <h3>Prepare</h3>
-          <p>
-            Upload the documents needed for your application.
-          </p>
-        </div>
+        <div className="feature-grid">
+          <FeatureCard
+            number="01"
+            icon="🎓"
+            title="Choose"
+            text="Choose your field, specialization, and university."
+          />
 
-        <div>
-          <span>03</span>
-          <h3>Track</h3>
-          <p>
-            Follow every stage of your application from one
-            dashboard.
-          </p>
+          <FeatureCard
+            number="02"
+            icon="📄"
+            title="Prepare"
+            text="Upload and organize the documents required for your application."
+          />
+
+          <FeatureCard
+            number="03"
+            icon="📊"
+            title="Track"
+            text="Follow your application progress from one simple dashboard."
+          />
         </div>
       </section>
 
-      <footer className="landing-footer">
-        © {new Date().getFullYear()} MIDOYOL. All rights reserved.
-      </footer>
+      <section className="how-section">
+        <div className="section-heading">
+          <span>HOW IT WORKS</span>
+          <h2>Four simple stages.</h2>
+        </div>
+
+        <div className="how-grid">
+          <HowCard
+            number="01"
+            title="Registration"
+            text="Create your MIDOYOL student account."
+          />
+
+          <HowCard
+            number="02"
+            title="Choose"
+            text="Select your study field, major, and university."
+          />
+
+          <HowCard
+            number="03"
+            title="Documents"
+            text="Upload the documents required for your application."
+          />
+
+          <HowCard
+            number="04"
+            title="Payment"
+            text="Application payment will be available soon."
+          />
+        </div>
+      </section>
+
+      <section className="landing-cta">
+        <div>
+          <span>READY TO START?</span>
+          <h2>
+            Your university journey
+            starts with one step.
+          </h2>
+        </div>
+
+        <button
+          className="primary-button"
+          onClick={onStart}
+        >
+          Start Your Application
+        </button>
+      </section>
+    </main>
+  );
+}
+
+function FeatureCard({
+  number,
+  icon,
+  title,
+  text,
+}) {
+  return (
+    <div className="feature-card">
+      <div className="feature-top">
+        <span className="feature-number">
+          {number}
+        </span>
+
+        <span className="feature-icon">
+          {icon}
+        </span>
+      </div>
+
+      <h3>{title}</h3>
+      <p>{text}</p>
     </div>
   );
 }
 
-/* =========================================================
-   VERIFICATION SCREEN
-========================================================= */
+function HowCard({
+  number,
+  title,
+  text,
+}) {
+  return (
+    <div className="how-card">
+      <span>{number}</span>
+      <div>
+        <h3>{title}</h3>
+        <p>{text}</p>
+      </div>
+    </div>
+  );
+}
 
 function VerificationScreen({
   user,
-  onResend,
   onCheck,
+  onResend,
   onLogout,
-  loading,
 }) {
   return (
     <div className="verification-page">
       <div className="verification-card">
-        <div className="verification-icon">
-          ✉
+        <div className="verification-logo">
+          MIDOYOL
         </div>
 
-        <div className="brand-box centered">
-          MIDOYOL
+        <div className="verification-icon">
+          ✉
         </div>
 
         <h1>Verify your email</h1>
 
         <p>
-          We sent a verification link to:
+          We sent a verification email to:
         </p>
 
-        <strong className="verification-email">
-          {user.email}
-        </strong>
+        <strong>{user?.email}</strong>
 
-        <p className="muted">
-          Open the email and click the verification link.
-          After that, come back here and tap the button below.
+        <p className="verification-help">
+          Open your email and click the
+          verification link, then come back
+          here.
         </p>
 
         <button
           className="primary-button full"
           onClick={onCheck}
-          disabled={loading}
         >
-          {loading
-            ? "Checking..."
-            : "I Verified My Email"}
+          I've Verified My Email
         </button>
 
         <button
           className="secondary-button full"
           onClick={onResend}
-          disabled={loading}
         >
           Resend Verification Email
         </button>
 
         <button
-          className="link-button"
+          className="text-button"
           onClick={onLogout}
         >
-          Sign out
+          Sign Out
         </button>
       </div>
     </div>
   );
 }
 
-/* =========================================================
-   NAVBAR
-========================================================= */
-
 function Navbar({
   user,
-  page,
-  setPage,
-  onStartApplication,
-  onLogout,
   darkMode,
-  setDarkMode,
-  showMobileMenu,
-  setShowMobileMenu,
-  notifications,
-  showNotifications,
-  setShowNotifications,
-  markNotificationRead,
+  onToggleDark,
+  onHome,
+  onStartApplication,
   onProgress,
   onPayments,
+  onSupport,
+  onLogout,
+  notificationOpen,
+  setNotificationOpen,
+  notifications,
+  onMarkNotificationRead,
+  onOpenMobile,
 }) {
   const unreadCount = notifications.filter(
     (item) => !item.read
   ).length;
 
   return (
-    <>
-      <nav className="navbar">
-        <button
-          className="nav-brand"
-          onClick={() => setPage("dashboard")}
-        >
-          MIDOYOL
+    <header className="main-navbar">
+      <button
+        className="navbar-brand"
+        onClick={onHome}
+      >
+        <span>MIDOYOL</span>
+      </button>
+
+      <nav className="desktop-nav-links">
+        <button onClick={onHome}>
+          Home
         </button>
 
-        <div className="desktop-nav-links">
-          <button
-            className={page === "dashboard" ? "active" : ""}
-            onClick={() => setPage("dashboard")}
-          >
-            Home
-          </button>
+        <button
+          onClick={() => {
+            document
+              .getElementById(
+                "universities-section"
+              )
+              ?.scrollIntoView({
+                behavior: "smooth",
+              });
+          }}
+        >
+          Universities
+        </button>
 
-          <button
-            onClick={() => {
-              setPage("dashboard");
+        <button
+          onClick={() => {
+            document
+              .getElementById(
+                "study-section"
+              )
+              ?.scrollIntoView({
+                behavior: "smooth",
+              });
+          }}
+        >
+          Study
+        </button>
+      </nav>
 
-              setTimeout(() => {
-                document
-                  .getElementById("universities-section")
-                  ?.scrollIntoView({
-                    behavior: "smooth",
-                  });
-              }, 50);
-            }}
-          >
-            Universities
-          </button>
-
+      <div className="nav-right">
+        <div className="notification-wrapper">
           <button
-            onClick={() => {
-              setPage("application");
-              onStartApplication();
-            }}
-          >
-            Study
-          </button>
-        </div>
-
-        <div className="nav-right">
-          <button
-            className="notification-button"
+            className="icon-button"
             onClick={() =>
-              setShowNotifications(!showNotifications)
+              setNotificationOpen(
+                (current) => !current
+              )
             }
+            aria-label="Notifications"
           >
-            ♧
+            🔔
 
             {unreadCount > 0 && (
-              <span className="notification-count">
-                {unreadCount}
+              <span className="notification-badge">
+                {unreadCount > 9
+                  ? "9+"
+                  : unreadCount}
               </span>
             )}
           </button>
 
-          <button
-            className="nav-start-button"
-            onClick={onStartApplication}
-          >
-            Start Application
-          </button>
-
-          <button
-            className="hamburger"
-            onClick={() =>
-              setShowMobileMenu(!showMobileMenu)
-            }
-            aria-label="Menu"
-          >
-            <span></span>
-            <span></span>
-            <span></span>
-          </button>
+          {notificationOpen && (
+            <NotificationPanel
+              notifications={notifications}
+              onRead={
+                onMarkNotificationRead
+              }
+              onClose={() =>
+                setNotificationOpen(
+                  false
+                )
+              }
+            />
+          )}
         </div>
 
-        {showNotifications && (
-          <NotificationPanel
-            notifications={notifications}
-            onRead={markNotificationRead}
-            onClose={() => setShowNotifications(false)}
-          />
-        )}
-      </nav>
+        <button
+          className="primary-button small"
+          onClick={onStartApplication}
+        >
+          Start Application
+        </button>
 
-      {showMobileMenu && (
-        <MobileMenu
-          user={user}
-          darkMode={darkMode}
-          setDarkMode={setDarkMode}
-          onProgress={onProgress}
-          onPayments={onPayments}
-          onLogout={onLogout}
-          onClose={() => setShowMobileMenu(false)}
-        />
-      )}
-    </>
+        <button
+          className="hamburger-button"
+          onClick={onOpenMobile}
+          aria-label="Open menu"
+        >
+          <span />
+          <span />
+          <span />
+        </button>
+      </div>
+    </header>
   );
 }
-
-/* =========================================================
-   MOBILE MENU
-========================================================= */
 
 function MobileMenu({
   user,
   darkMode,
-  setDarkMode,
+  onToggleDark,
   onProgress,
   onPayments,
+  onSupport,
   onLogout,
   onClose,
 }) {
   return (
     <div className="mobile-menu-overlay">
       <aside className="mobile-menu">
-        <div className="mobile-menu-top">
-          <div className="mobile-menu-brand">
+        <div className="mobile-menu-header">
+          <div className="brand-box">
             MIDOYOL
           </div>
 
           <button
-            className="menu-close"
+            className="icon-button"
             onClick={onClose}
+            aria-label="Close menu"
           >
-            ×
+            ✕
           </button>
         </div>
 
-        <div className="mobile-user-card">
-          <div className="user-avatar">
-            {(user?.email || "S")
-              .charAt(0)
-              .toUpperCase()}
+        <div className="mobile-account">
+          <div className="account-avatar">
+            {(user?.displayName ||
+              user?.email ||
+              "S")[0].toUpperCase()}
           </div>
 
           <div>
-            <small>Student Account</small>
-            <strong>{user?.email}</strong>
+            <strong>
+              {user?.displayName ||
+                "Student"}
+            </strong>
+
+            <span>{user?.email}</span>
           </div>
         </div>
 
         <div className="mobile-menu-items">
           <button
-            onClick={() => setDarkMode(!darkMode)}
+            onClick={onToggleDark}
+            className="mobile-menu-item"
           >
             <span>🌙</span>
 
             <div>
               <strong>Dark Mode</strong>
               <small>
-                {darkMode ? "On" : "Off"}
+                {darkMode
+                  ? "Enabled"
+                  : "Disabled"}
               </small>
             </div>
 
-            <div
-              className={`toggle ${
-                darkMode ? "on" : ""
-              }`}
-            >
-              <span></span>
-            </div>
+            <span className="toggle-indicator">
+              {darkMode ? "ON" : "OFF"}
+            </span>
           </button>
 
-          <button onClick={onProgress}>
+          <button
+            onClick={onProgress}
+            className="mobile-menu-item"
+          >
             <span>📊</span>
 
             <div>
-              <strong>Application Progress</strong>
+              <strong>
+                Application Progress
+              </strong>
+
               <small>
-                View your current stage
+                View your application
+                progress
               </small>
             </div>
-
-            <span>›</span>
           </button>
 
-          <button onClick={onPayments}>
+          <button
+            onClick={onPayments}
+            className="mobile-menu-item"
+          >
             <span>💳</span>
 
             <div>
               <strong>Payments</strong>
+
               <small>
-                Payment History & Receipts
+                Payment history &
+                receipts
               </small>
             </div>
+          </button>
 
-            <span>›</span>
+          <button
+            onClick={onSupport}
+            className="mobile-menu-item"
+          >
+            <span>💬</span>
+
+            <div>
+              <strong>
+                Contact Support
+              </strong>
+
+              <small>
+                Get help with your
+                application
+              </small>
+            </div>
           </button>
         </div>
 
         <div className="mobile-menu-bottom">
           <button
-            className="logout-menu-button"
+            className="logout-button"
             onClick={onLogout}
           >
-            <span>🚪</span>
+            <span>↪</span>
             Logout
           </button>
         </div>
@@ -1678,10 +2032,6 @@ function MobileMenu({
   );
 }
 
-/* =========================================================
-   NOTIFICATIONS
-========================================================= */
-
 function NotificationPanel({
   notifications,
   onRead,
@@ -1689,103 +2039,133 @@ function NotificationPanel({
 }) {
   return (
     <div className="notification-panel">
-      <div className="panel-header">
+      <div className="notification-header">
         <div>
-          <h3>Notifications</h3>
-          <p>Your latest MIDOYOL updates</p>
+          <strong>Notifications</strong>
+          <span>
+            Your latest updates
+          </span>
         </div>
 
-        <button onClick={onClose}>×</button>
+        <button
+          className="icon-button"
+          onClick={onClose}
+        >
+          ✕
+        </button>
       </div>
 
-      {notifications.length === 0 ? (
-        <div className="empty-panel">
-          <span>🔔</span>
-          <p>No notifications yet.</p>
-        </div>
-      ) : (
-        <div className="notification-list">
-          {notifications.slice(0, 8).map((item) => (
-            <button
-              className={`notification-item ${
-                item.read ? "" : "unread"
-              }`}
-              key={item.id}
-              onClick={() => onRead(item.id)}
-            >
-              <div className="notification-dot">
-                {item.read ? "✓" : "!"}
-              </div>
+      <div className="notification-list">
+        {notifications.length === 0 ? (
+          <div className="empty-state small">
+            <span>🔔</span>
+            <p>No notifications yet.</p>
+          </div>
+        ) : (
+          notifications
+            .slice(0, 8)
+            .map((item) => (
+              <button
+                key={item.id}
+                className={`notification-item ${
+                  item.read
+                    ? ""
+                    : "unread"
+                }`}
+                onClick={() =>
+                  onRead(item.id)
+                }
+              >
+                <span className="notification-dot" />
 
-              <div>
-                <strong>{item.title}</strong>
+                <div>
+                  <strong>
+                    {item.title}
+                  </strong>
 
-                <p>{item.message}</p>
+                  <p>
+                    {item.message}
+                  </p>
 
-                <small>
-                  {formatDateTime(item.createdAt)}
-                </small>
-              </div>
-            </button>
-          ))}
-        </div>
-      )}
+                  <small>
+                    {formatDateTime(
+                      item.createdAt
+                    )}
+                  </small>
+                </div>
+              </button>
+            ))
+        )}
+      </div>
     </div>
   );
 }
-
-/* =========================================================
-   DASHBOARD
-========================================================= */
 
 function DashboardPage({
   user,
   application,
   applicationId,
+  documents,
+  payments,
   progressStage,
   documentCount,
-  documentsComplete,
-  chooseComplete,
   onStartApplication,
   onDocuments,
+  onPayment,
   onSupport,
 }) {
+  const applicationReady =
+    Boolean(applicationId);
+
+  const chooseComplete = Boolean(
+    application?.field &&
+      application?.specialization &&
+      application?.university
+  );
+
+  const paymentStatus =
+    application?.paymentStatus ||
+    "coming_soon";
+
   return (
-    <div className="portal-page">
+    <main className="portal-page">
       <section className="welcome-section">
         <div>
-          <div className="eyebrow">
-            MIDOYOL STUDENT PORTAL
-          </div>
+          <span className="eyebrow">
+            STUDENT PORTAL
+          </span>
 
           <h1>
-            Welcome back,
-            <span>
-              {" "}
-              {user.displayName?.split(" ")[0] ||
-                "Student"}
-            </span>
+            Welcome back,{" "}
+            {user?.displayName?.split(
+              " "
+            )[0] || "Student"}
+            .
           </h1>
 
           <p>
-            Everything you need for your university journey,
-            organized in one place.
+            Manage your application and
+            keep track of your progress
+            from here.
           </p>
         </div>
 
         {applicationId && (
           <div className="application-id-badge">
-            <small>APPLICATION ID</small>
-            <strong>{applicationId}</strong>
+            <span>APPLICATION ID</span>
+            <strong>
+              {applicationId}
+            </strong>
           </div>
         )}
       </section>
 
-      <section id="progress-section">
+      <section
+        id="progress-section"
+        className="dashboard-section"
+      >
         <ProgressTracker
           currentStage={progressStage}
-          documentsComplete={documentsComplete}
-          chooseComplete={chooseComplete}
         />
       </section>
 
@@ -1793,255 +2173,247 @@ function DashboardPage({
         <div className="dashboard-main-card">
           <div className="card-heading">
             <div>
-              <span className="eyebrow">
-                YOUR APPLICATION
+              <span className="card-kicker">
+                APPLICATION
               </span>
 
               <h2>
-                Continue your journey
+                Application Status
               </h2>
             </div>
 
-            <span className="save-indicator">
-              ● Auto Save
-            </span>
+            {application?.status && (
+              <span
+                className={`status-pill ${
+                  application.status
+                }`}
+              >
+                {application.status}
+              </span>
+            )}
           </div>
 
-          <div className="dashboard-status">
-            <div>
-              <span className="status-icon">✓</span>
+          <div className="status-list">
+            <StatusRow
+              number="01"
+              title="Registration"
+              status="Completed"
+              complete
+            />
 
-              <div>
-                <strong>
-                  Registration
-                </strong>
+            <StatusRow
+              number="02"
+              title="Choose"
+              status={
+                chooseComplete
+                  ? "Completed"
+                  : "In Progress"
+              }
+              complete={chooseComplete}
+            />
 
-                <small>
-                  Account successfully created
-                </small>
-              </div>
-            </div>
+            <StatusRow
+              number="03"
+              title="Documents"
+              status={
+                documentCount ===
+                REQUIRED_DOCUMENTS.length
+                  ? "Completed"
+                  : `${documentCount}/${REQUIRED_DOCUMENTS.length} uploaded`
+              }
+              complete={
+                documentCount ===
+                REQUIRED_DOCUMENTS.length
+              }
+            />
 
-            <div>
-              <span className="status-icon blue">
-                {chooseComplete ? "✓" : "2"}
-              </span>
-
-              <div>
-                <strong>
-                  University Selection
-                </strong>
-
-                <small>
-                  {chooseComplete
-                    ? "Selection completed"
-                    : "Choose your study path"}
-                </small>
-              </div>
-            </div>
-
-            <div>
-              <span className="status-icon gray">
-                {documentsComplete ? "✓" : "3"}
-              </span>
-
-              <div>
-                <strong>
-                  Documents
-                </strong>
-
-                <small>
-                  {documentCount}/
-                  {REQUIRED_DOCUMENTS.length} documents uploaded
-                </small>
-              </div>
-            </div>
-
-            <div>
-              <span className="status-icon gray">
-                4
-              </span>
-
-              <div>
-                <strong>
-                  Payment
-                </strong>
-
-                <small>
-                  Coming Soon
-                </small>
-              </div>
-            </div>
+            <StatusRow
+              number="04"
+              title="Payment"
+              status="Coming Soon"
+              complete={false}
+              comingSoon
+            />
           </div>
 
-          <button
-            className="primary-button"
-            onClick={onStartApplication}
-          >
-            {chooseComplete
-              ? "Review Application"
-              : "Start Application"}
-            <span>→</span>
-          </button>
+          {!applicationReady ? (
+            <div className="card-action">
+              <button
+                className="primary-button"
+                onClick={onStartApplication}
+              >
+                Start Application
+              </button>
+            </div>
+          ) : progressStage === 2 ? (
+            <div className="card-action">
+              <button
+                className="primary-button"
+                onClick={onStartApplication}
+              >
+                Continue Application
+              </button>
+            </div>
+          ) : progressStage === 3 ? (
+            <div className="card-action">
+              <button
+                className="primary-button"
+                onClick={onDocuments}
+              >
+                Continue to Documents
+              </button>
+            </div>
+          ) : (
+            <div className="card-action">
+              <button
+                className="primary-button"
+                onClick={onPayment}
+              >
+                View Payment
+              </button>
+            </div>
+          )}
         </div>
 
-        <div className="application-summary-card">
-          <span className="eyebrow">
-            APPLICATION SUMMARY
-          </span>
+        <div className="dashboard-side-card">
+          <div className="card-heading">
+            <div>
+              <span className="card-kicker">
+                SUMMARY
+              </span>
 
-          <h3>
-            {applicationId || "Not started"}
-          </h3>
-
-          <div className="summary-row">
-            <span>Field</span>
-            <strong>
-              {application?.field || "Not selected"}
-            </strong>
+              <h2>
+                Your Application
+              </h2>
+            </div>
           </div>
 
-          <div className="summary-row">
-            <span>Specialization</span>
-            <strong>
-              {application?.specialization ||
-                "Not selected"}
-            </strong>
-          </div>
+          <div className="summary-list">
+            <SummaryRow
+              label="Field"
+              value={
+                application?.field ||
+                "Not selected"
+              }
+            />
 
-          <div className="summary-row">
-            <span>University</span>
-            <strong>
-              {application?.university ||
-                "Not selected"}
-            </strong>
-          </div>
+            <SummaryRow
+              label="Specialization"
+              value={
+                application?.specialization ||
+                "Not selected"
+              }
+            />
 
-          <button
-            className="outline-button"
-            onClick={onDocuments}
-          >
-            Manage Documents
-          </button>
+            <SummaryRow
+              label="University"
+              value={
+                application?.university ||
+                "Not selected"
+              }
+            />
+
+            <SummaryRow
+              label="Documents"
+              value={`${documentCount}/${REQUIRED_DOCUMENTS.length}`}
+            />
+
+            <SummaryRow
+              label="Payment"
+              value="Coming Soon"
+            />
+          </div>
         </div>
       </section>
 
       <section
-        className="universities-section"
         id="universities-section"
+        className="dashboard-section"
       >
-        <div className="section-title">
-          <div>
-            <span className="eyebrow">
-              UNIVERSITY PARTNERS
-            </span>
-
-            <h2>
-              Explore your options
-            </h2>
-          </div>
-
-          <button
-            className="link-button"
-            onClick={onStartApplication}
-          >
-            Start application →
-          </button>
-        </div>
-
-        <div className="university-grid">
-          {UNIVERSITIES.map((university, index) => (
-            <div
-              className="university-card"
-              key={university}
-            >
-              <div className="university-number">
-                0{index + 1}
-              </div>
-
-              <div className="university-logo">
-                {university
-                  .split(" ")
-                  .slice(0, 2)
-                  .map((word) => word[0])
-                  .join("")}
-              </div>
-
-              <h3>{university}</h3>
-
-              <p>
-                Explore programs and application options.
-              </p>
-
-              <button
-                onClick={onStartApplication}
-              >
-                View & Apply →
-              </button>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="how-section">
-        <div className="section-title centered-title">
-          <span className="eyebrow">
-            HOW IT WORKS
-          </span>
-
+        <div className="section-heading left">
+          <span>UNIVERSITY PARTNERS</span>
           <h2>
-            Your journey in four simple stages
+            Explore your options.
           </h2>
         </div>
 
-        <div className="how-grid">
-          <div>
-            <span>01</span>
-            <h3>Register</h3>
-            <p>
-              Create your secure student account.
-            </p>
-          </div>
+        <div className="university-grid">
+          {UNIVERSITIES.map(
+            (university) => (
+              <div
+                className="university-card"
+                key={university}
+              >
+                <div className="university-logo">
+                  {university
+                    .split(" ")
+                    .map((word) =>
+                      word[0]
+                    )
+                    .join("")
+                    .slice(0, 3)}
+                </div>
 
-          <div>
-            <span>02</span>
-            <h3>Choose</h3>
-            <p>
-              Select your field, specialization and university.
-            </p>
-          </div>
+                <h3>{university}</h3>
 
-          <div>
-            <span>03</span>
-            <h3>Documents</h3>
-            <p>
-              Upload your required application documents.
-            </p>
-          </div>
+                <p>
+                  Istanbul, Türkiye
+                </p>
+              </div>
+            )
+          )}
+        </div>
+      </section>
 
-          <div>
-            <span>04</span>
-            <h3>Payment</h3>
-            <p>
-              Application fee payment gateway coming soon.
-            </p>
-          </div>
+      <section
+        id="study-section"
+        className="dashboard-section"
+      >
+        <div className="section-heading left">
+          <span>HOW IT WORKS</span>
+          <h2>
+            Your application journey.
+          </h2>
+        </div>
+
+        <div className="how-grid portal">
+          <HowCard
+            number="01"
+            title="Registration"
+            text="Create your student account and verify your email."
+          />
+
+          <HowCard
+            number="02"
+            title="Choose"
+            text="Select your field, specialization, and university."
+          />
+
+          <HowCard
+            number="03"
+            title="Documents"
+            text="Upload all required application documents."
+          />
+
+          <HowCard
+            number="04"
+            title="Payment"
+            text="Online payment will become available soon."
+          />
         </div>
       </section>
 
       <section className="support-cta">
         <div>
-          <span className="eyebrow">
-            NEED HELP?
-          </span>
-
+          <span>NEED HELP?</span>
           <h2>
-            We are here for your journey.
+            We're here to help you.
           </h2>
 
           <p>
-            If you have a question about your application,
-            contact MIDOYOL support.
+            Contact MIDOYOL support if you
+            have a question about your
+            application.
           </p>
         </div>
 
@@ -2052,87 +2424,102 @@ function DashboardPage({
           Contact Support
         </button>
       </section>
+    </main>
+  );
+}
+
+function StatusRow({
+  number,
+  title,
+  status,
+  complete,
+  comingSoon,
+}) {
+  return (
+    <div className="status-row">
+      <div
+        className={`status-number ${
+          complete
+            ? "complete"
+            : comingSoon
+            ? "coming-soon"
+            : ""
+        }`}
+      >
+        {complete ? "✓" : number}
+      </div>
+
+      <div className="status-content">
+        <strong>{title}</strong>
+        <span>{status}</span>
+      </div>
     </div>
   );
 }
 
-/* =========================================================
-   PROGRESS TRACKER
-========================================================= */
+function SummaryRow({
+  label,
+  value,
+}) {
+  return (
+    <div className="summary-row">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
 
 function ProgressTracker({
   currentStage,
-  documentsComplete,
-  chooseComplete,
 }) {
-  const stages = [
-    {
-      number: 1,
-      title: "Registration",
-      text: "Account",
-    },
-    {
-      number: 2,
-      title: "Choose",
-      text: "University",
-    },
-    {
-      number: 3,
-      title: "Documents",
-      text: "Upload",
-    },
-    {
-      number: 4,
-      title: "Payment",
-      text: "Coming Soon",
-    },
+   const stages = [
+    { number: 1, title: "Registration", short: "Register" },
+    { number: 2, title: "Choose", short: "Choose" },
+    { number: 3, title: "Documents", short: "Documents" },
+    { number: 4, title: "Payment", short: "Payment" },
   ];
 
   return (
     <div className="progress-card">
-      <div className="progress-header">
+      <div className="progress-card-header">
         <div>
-          <span className="eyebrow">
-            APPLICATION PROGRESS
-          </span>
-
-          <h2>
-            Track your journey
-          </h2>
+          <span className="card-kicker">APPLICATION PROGRESS</span>
+          <h2>Your journey</h2>
         </div>
 
         <span className="progress-stage-label">
-          Stage {currentStage} of 4
+          Step {currentStage} of 4
         </span>
       </div>
 
       <div className="progress-track">
         {stages.map((stage, index) => {
-          const complete =
-            stage.number < currentStage ||
-            (stage.number === 2 &&
-              chooseComplete) ||
-            (stage.number === 3 &&
-              documentsComplete);
-
-          const active =
-            stage.number === currentStage &&
-            !complete;
+          const completed = stage.number < currentStage;
+          const active = stage.number === currentStage;
 
           return (
             <React.Fragment key={stage.number}>
               <div
                 className={`progress-step ${
-                  complete ? "complete" : ""
+                  completed ? "completed" : ""
                 } ${active ? "active" : ""}`}
               >
                 <div className="progress-circle">
-                  {complete ? "✓" : stage.number}
+                  {completed ? "✓" : stage.number}
                 </div>
 
                 <div className="progress-step-text">
                   <strong>{stage.title}</strong>
-                  <small>{stage.text}</small>
+
+                  <span>
+                    {stage.number === 4
+                      ? "Coming Soon"
+                      : active
+                      ? "In Progress"
+                      : completed
+                      ? "Completed"
+                      : "Next"}
+                  </span>
                 </div>
               </div>
 
@@ -2140,10 +2527,10 @@ function ProgressTracker({
                 <div
                   className={`progress-line ${
                     stage.number < currentStage
-                      ? "complete"
+                      ? "completed"
                       : ""
                   }`}
-                ></div>
+                />
               )}
             </React.Fragment>
           );
@@ -2153,16 +2540,13 @@ function ProgressTracker({
   );
 }
 
-/* =========================================================
-   APPLICATION PAGE
-========================================================= */
-
 function ApplicationPage({
   application,
   applicationId,
   saving,
   onSave,
   onDocuments,
+  progressStage,
 }) {
   const [selectedField, setSelectedField] = useState(
     application?.field || ""
@@ -2172,34 +2556,39 @@ function ApplicationPage({
     application?.specialization || ""
   );
 
-  const [selectedUniversity, setSelectedUniversity] =
-    useState(application?.university || "");
+  const [selectedUniversity, setSelectedUniversity] = useState(
+    application?.university || ""
+  );
 
   const [openField, setOpenField] = useState(false);
   const [openMajor, setOpenMajor] = useState(false);
-  const [openUniversity, setOpenUniversity] =
-    useState(false);
+  const [openUniversity, setOpenUniversity] = useState(false);
 
   useEffect(() => {
     setSelectedField(application?.field || "");
     setSelectedMajor(application?.specialization || "");
     setSelectedUniversity(application?.university || "");
-  }, [application]);
+  }, [
+    application?.field,
+    application?.specialization,
+    application?.university,
+  ]);
 
   useEffect(() => {
-    if (!applicationId) return;
+    if (
+      !selectedField ||
+      !selectedMajor ||
+      !selectedUniversity
+    ) {
+      return;
+    }
 
     const timer = setTimeout(() => {
       onSave({
         field: selectedField,
         specialization: selectedMajor,
         university: selectedUniversity,
-        stage:
-          selectedField &&
-          selectedMajor &&
-          selectedUniversity
-            ? "documents"
-            : "choose",
+        stage: "documents",
       });
     }, 600);
 
@@ -2214,205 +2603,1337 @@ function ApplicationPage({
     ? STUDY_FIELDS[selectedField] || []
     : [];
 
-  const ready =
+  const ready = Boolean(
     selectedField &&
-    selectedMajor &&
-    selectedUniversity;
+      selectedMajor &&
+      selectedUniversity
+  );
 
-  const chooseField = (field) => {
-    setSelectedField(field);
+  function chooseField(value) {
+    setSelectedField(value);
     setSelectedMajor("");
-    setSelectedUniversity("");
     setOpenField(false);
-  };
-
-  const chooseMajor = (major) => {
-    setSelectedMajor(major);
-    setSelectedUniversity("");
     setOpenMajor(false);
-  };
+  }
 
-  const chooseUniversity = (university) => {
-    setSelectedUniversity(university);
+  function chooseMajor(value) {
+    setSelectedMajor(value);
+    setOpenMajor(false);
+  }
+
+  function chooseUniversity(value) {
+    setSelectedUniversity(value);
     setOpenUniversity(false);
-  };
+  }
 
   return (
-    <div className="inner-page">
-      <section className="inner-page-header">
+    <main className="portal-page application-page">
+      <section className="application-header">
         <div>
-          <span className="eyebrow">
+          <span className="step-label">
             STEP 02 · CHOOSE
           </span>
 
-          <h1>
-            Build your university path.
-          </h1>
+          <h1>Build your university application</h1>
 
           <p>
-            Choose your field, specialization and preferred
-            university.
+            Choose your study field, specialization and
+            preferred university.
           </p>
         </div>
 
-        <div className="save-status">
-          <span className={saving ? "saving-dot" : ""}>
-            ●
-          </span>
-
-          {saving
-            ? "Saving..."
-            : "Your progress is saved"}
+        <div className="application-id-box">
+          <span>Application ID</span>
+          <strong>{applicationId || "—"}</strong>
         </div>
       </section>
 
-      <ProgressTracker
-        currentStage={ready ? 2 : 2}
-        chooseComplete={Boolean(ready)}
-        documentsComplete={false}
-      />
+      <section className="dashboard-section">
+        <ProgressTracker currentStage={progressStage} />
+      </section>
 
-      <section className="application-layout">
-        <div className="application-form-card">
-          <div className="form-card-heading">
-            <span className="step-number">01</span>
+      <section className="application-card">
+        <div className="application-card-header">
+          <div>
+            <span className="card-kicker">
+              YOUR ACADEMIC CHOICES
+            </span>
 
-            <div>
-              <span className="eyebrow">
-                STUDY PATH
-              </span>
+            <h2>Choose your program</h2>
 
-              <h2>
-                Choose your field
-              </h2>
+            <p>
+              You can change your choices before submitting
+              your application.
+            </p>
+          </div>
+        </div>
 
-              <p>
-                Start by selecting the area you want to study.
-              </p>
+        <div className="application-form">
+          <div className="form-group">
+            <label className="form-label">
+              Study Field
+            </label>
+
+            <div className="select-field">
+              <button
+                type="button"
+                className="select-trigger"
+                onClick={() => {
+                  setOpenField(!openField);
+                  setOpenMajor(false);
+                  setOpenUniversity(false);
+                }}
+              >
+                <span>
+                  {selectedField || "Select a study field"}
+                </span>
+
+                <span>⌄</span>
+              </button>
+
+              {openField && (
+                <div className="dropdown-menu">
+                  {Object.keys(STUDY_FIELDS).map((field) => (
+                    <button
+                      type="button"
+                      key={field}
+                      onClick={() => chooseField(field)}
+                    >
+                      {field}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
+
+            <span className="form-help">
+              Select the academic field you want to study.
+            </span>
           </div>
 
-          <div className="custom-select-wrapper">
-            <button
-              className={`custom-select ${
-                openField ? "opened" : ""
-              }`}
-              onClick={() => {
-                setOpenField(!openField);
-                setOpenMajor(false);
-                setOpenUniversity(false);
-              }}
-            >
-              <span>
-                {selectedField ||
-                  "Select your field"}
-              </span>
+          <div className="form-group">
+            <label className="form-label">
+              Specialization
+            </label>
 
-              <span>⌄</span>
-            </button>
+            <div className="select-field">
+              <button
+                type="button"
+                className="select-trigger"
+                disabled={!selectedField}
+                onClick={() => {
+                  if (!selectedField) return;
 
-            {openField && (
-              <div className="select-menu">
-                {Object.keys(STUDY_FIELDS).map(
-                  (field) => (
+                  setOpenMajor(!openMajor);
+                  setOpenField(false);
+                  setOpenUniversity(false);
+                }}
+              >
+                <span>
+                  {selectedMajor ||
+                    (selectedField
+                      ? "Select a specialization"
+                      : "Choose a study field first")}
+                </span>
+
+                <span>⌄</span>
+              </button>
+
+              {openMajor && selectedField && (
+                <div className="dropdown-menu">
+                  {majors.map((major) => (
                     <button
-                      key={field}
+                      type="button"
+                      key={major}
+                      onClick={() => chooseMajor(major)}
+                    >
+                      {major}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <span className="form-help">
+              Choose the program you want to apply for.
+            </span>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">
+              Preferred University
+            </label>
+
+            <div className="select-field">
+              <button
+                type="button"
+                className="select-trigger"
+                onClick={() => {
+                  setOpenUniversity(!openUniversity);
+                  setOpenField(false);
+                  setOpenMajor(false);
+                }}
+              >
+                <span>
+                  {selectedUniversity ||
+                    "Select a university"}
+                </span>
+
+                <span>⌄</span>
+              </button>
+
+              {openUniversity && (
+                <div className="dropdown-menu">
+                  {UNIVERSITIES.map((university) => (
+                    <button
+                      type="button"
+                      key={university}
                       onClick={() =>
-                        chooseField(field)
+                        chooseUniversity(university)
                       }
                     >
+                      {university}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <span className="form-help">
+              Select your preferred university in Türkiye.
+            </span>
+          </div>
+        </div>
+
+        <div className="application-footer">
+          <div className="save-status">
+            {saving ? "Saving..." : "Auto Saved"}
+          </div>
+
+          <button
+            type="button"
+            className="primary-button"
+            disabled={!ready}
+            onClick={onDocuments}
+          >
+            Continue to Documents
+            <span>→</span>
+          </button>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function DocumentsPage({
+  application,
+  applicationId,
+  documents,
+  documentCount,
+  saving,
+  progressStage,
+  onUpload,
+  onDelete,
+  onPayment,
+  onBack,
+}) {
+  const allComplete =
+    documentCount === REQUIRED_DOCUMENTS.length;
+
+  const documentMap = Object.fromEntries(
+    documents.map((item) => [item.id, item])
+  );
+
+  return (
+    <main className="portal-page documents-page">
+      <section className="application-header">
+        <div>
+          <span className="step-label">
+            STEP 03 · DOCUMENTS
+          </span>
+
+          <h1>Prepare your documents</h1>
+
+          <p>
+            Upload the documents required for your
+            application.
+          </p>
+        </div>
+
+        <div className="application-id-box">
+          <span>Application ID</span>
+          <strong>{applicationId || "—"}</strong>
+        </div>
+      </section>
+
+      <section className="dashboard-section">
+        <ProgressTracker
+          currentStage={allComplete ? 4 : progressStage}
+        />
+      </section>
+
+      <section className="documents-card">
+        <div className="documents-card-header">
+          <div>
+            <span className="card-kicker">
+              REQUIRED DOCUMENTS
+            </span>
+
+            <h2>Upload your files</h2>
+
+            <p>
+              Accepted formats: PDF, JPG and PNG. Maximum
+              size: 10 MB per file.
+            </p>
+          </div>
+
+          <div className="documents-count">
+            <strong>
+              {documentCount}/{REQUIRED_DOCUMENTS.length}
+            </strong>
+
+            <span>Uploaded</span>
+          </div>
+        </div>
+
+        <div className="documents-list">
+          {REQUIRED_DOCUMENTS.map((item) => {
+            const uploaded = documentMap[item.id];
+            const isUploaded =
+              uploaded?.status === "uploaded";
+
+            return (
+              <div
+                className={`document-item ${
+                  isUploaded ? "uploaded" : ""
+                }`}
+                key={item.id}
+              >
+                <div className="document-icon">
+                  {isUploaded ? "✓" : "↑"}
+                </div>
+
+                <div className="document-info">
+                  <h3>{item.title}</h3>
+
+                  <p>{item.description}</p>
+
+                  {isUploaded && (
+                    <div className="document-meta">
                       <span>
-                        {field}
+                        {uploaded.fileName || "Uploaded file"}
                       </span>
 
-                      <small>
-                        {STUDY_FIELDS[field].length} programs
-                      </small>
+                      <span>
+                        {formatDate(uploaded.uploadedAt)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="document-actions">
+                  {isUploaded &&
+                    uploaded.downloadURL && (
+                      <a
+                        href={uploaded.downloadURL}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="secondary-button"
+                      >
+                        View
+                      </a>
+                    )}
+
+                  {isUploaded ? (
+                    <button
+                      type="button"
+                      className="danger-button"
+                      disabled={saving}
+                      onClick={() =>
+                        onDelete(
+                          item.id,
+                          uploaded.storagePath
+                        )
+                      }
+                    >
+                      Delete
                     </button>
-                  )
-                )}
+                  ) : (
+                    <label className="upload-button">
+                      Upload
+
+                      <input
+                        type="file"
+                        accept={item.accept}
+                        disabled={saving}
+                        onChange={(event) => {
+                          const file =
+                            event.target.files?.[0];
+
+                          if (file) {
+                            onUpload(item.id, file);
+                          }
+
+                          event.target.value = "";
+                        }}
+                      />
+                    </label>
+                  )}
+                </div>
               </div>
-            )}
+            );
+          })}
+        </div>
+
+        <div className="documents-footer">
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={onBack}
+          >
+            ← Back to Application
+          </button>
+
+          {allComplete ? (
+            <button
+              type="button"
+              className="primary-button"
+              onClick={onPayment}
+            >
+              Continue to Payment
+              <span>→</span>
+            </button>
+          ) : (
+            <div className="documents-note">
+              Upload all required documents to continue.
+            </div>
+          )}
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function PaymentPage({
+  user,
+  application,
+  applicationId,
+  payments,
+  saving,
+  onCreatePayment,
+  onBack,
+  onReceipt,
+}) {
+  const applicationPayments = payments.filter(
+    (payment) =>
+      payment.applicationId === applicationId
+  );
+
+  const pendingPayment = applicationPayments.find(
+    (payment) => payment.status === "pending"
+  );
+
+  return (
+    <main className="portal-page payment-page">
+      <section className="application-header">
+        <div>
+          <span className="step-label">
+            STEP 04 · PAYMENT
+          </span>
+
+          <h1>Application fee</h1>
+
+          <p>
+            Complete the final step when online payment
+            becomes available.
+          </p>
+        </div>
+
+        <div className="application-id-box">
+          <span>Application ID</span>
+          <strong>{applicationId || "—"}</strong>
+        </div>
+      </section>
+
+      <section className="dashboard-section">
+        <ProgressTracker currentStage={4} />
+      </section>
+
+      <section className="payment-card">
+        <div className="payment-icon">$</div>
+
+        <span className="card-kicker">
+          MIDOYOL APPLICATION FEE
+        </span>
+
+        <h2>$1 USD</h2>
+
+        <p className="payment-description">
+          The MIDOYOL application fee is currently
+          <strong> $1 USD</strong>.
+        </p>
+
+        <div className="coming-soon-box">
+          <span className="coming-soon-badge">
+            COMING SOON
+          </span>
+
+          <h3>Online payment is not active yet.</h3>
+
+          <p>
+            We are preparing the secure payment gateway.
+            You will be able to pay online once it is
+            available.
+          </p>
+        </div>
+
+        {pendingPayment && (
+          <div className="pending-payment-box">
+            <strong>Payment request created</strong>
+
+            <span>
+              Status:{" "}
+              {pendingPayment.status || "pending"}
+            </span>
+
+            <small>
+              {formatDateTime(
+                pendingPayment.createdAt
+              )}
+            </small>
+          </div>
+        )}
+
+        <div className="payment-actions">
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={onBack}
+          >
+            ← Back to Documents
+          </button>
+
+          <button
+            type="button"
+            className="primary-button"
+            disabled={saving || Boolean(pendingPayment)}
+            onClick={onCreatePayment}
+          >
+            {pendingPayment
+              ? "Request Pending"
+              : "Create Payment Request"}
+          </button>
+        </div>
+
+        <p className="payment-security-note">
+          No card details are collected until the secure
+          payment gateway is officially launched.
+        </p>
+      </section>
+
+      {applicationPayments.length > 0 && (
+        <section className="payment-history-section">
+          <div className="section-heading">
+            <span className="card-kicker">
+              PAYMENT HISTORY
+            </span>
+
+            <h2>Your payment requests</h2>
           </div>
 
-          <div className="form-card-heading second">
-            <span className="step-number">02</span>
+          <div className="payment-history-list">
+            {applicationPayments.map((payment) => (
+              <div
+                className="payment-history-item"
+                key={payment.id}
+              >
+                <div>
+                  <strong>
+                    {payment.type ||
+                      "Application Fee"}
+                  </strong>
+
+                  <span>
+                    {formatDateTime(payment.createdAt)}
+                  </span>
+                </div>
+
+                <div>
+                  <strong>
+                    ${Number(payment.amount || 1).toFixed(
+                      2
+                    )}{" "}
+                    {payment.currency || "USD"}
+                  </strong>
+
+                  <span
+                    className={`status-pill ${
+                      payment.status || "pending"
+                    }`}
+                  >
+                    {payment.status || "pending"}
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => onReceipt(payment)}
+                >
+                  Receipt
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+    </main>
+  );
+}
+
+function PaymentHistoryModal({
+  payments,
+  onClose,
+  onOpenPayment,
+  onReceipt,
+}) {
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div
+        className="modal-card payment-history-modal"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="modal-header">
+          <div>
+            <span className="card-kicker">
+              PAYMENTS
+            </span>
+
+            <h2>Payment history</h2>
+          </div>
+
+          <button
+            type="button"
+            className="modal-close"
+            onClick={onClose}
+          >
+            ×
+          </button>
+        </div>
+
+        {payments.length === 0 ? (
+          <div className="empty-state">
+            <div className="empty-state-icon">$</div>
+
+            <h3>No payment history yet</h3>
+
+            <p>
+              Your payment requests and receipts will
+              appear here.
+            </p>
+
+            <button
+              type="button"
+              className="primary-button"
+              onClick={onOpenPayment}
+            >
+              Open Payment Page
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="payment-history-list">
+              {payments.map((payment) => (
+                <div
+                  className="payment-history-item"
+                  key={payment.id}
+                >
+                  <div>
+                    <strong>
+                      {payment.type ||
+                        "Application Fee"}
+                    </strong>
+
+                    <span>
+                      Application:{" "}
+                      {payment.applicationId || "—"}
+                    </span>
+
+                    <span>
+                      {formatDateTime(
+                        payment.createdAt
+                      )}
+                    </span>
+                  </div>
+
+                  <div>
+                    <strong>
+                      $
+                      {Number(
+                        payment.amount || 1
+                      ).toFixed(2)}{" "}
+                      {payment.currency || "USD"}
+                    </strong>
+
+                    <span
+                      className={`status-pill ${
+                        payment.status || "pending"
+                      }`}
+                    >
+                      {payment.status || "pending"}
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => onReceipt(payment)}
+                  >
+                    Receipt
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="primary-button"
+                onClick={onOpenPayment}
+              >
+                Open Payment Page
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ReceiptModal({
+  payment,
+  user,
+  onClose,
+}) {
+  if (!payment) return null;
+
+  function printReceipt() {
+    window.print();
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div
+        className="modal-card receipt-modal"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="receipt-content">
+          <div className="receipt-brand">
+            <div className="brand-box">MIDOYOL</div>
+
+            <span>Student Services</span>
+          </div>
+
+          <div className="receipt-title">
+            <span>PAYMENT RECEIPT</span>
+
+            <h2>Application Fee</h2>
+          </div>
+
+          <div className="receipt-amount">
+            <span>Amount</span>
+
+            <strong>
+              ${Number(payment.amount || 1).toFixed(2)}{" "}
+              {payment.currency || "USD"}
+            </strong>
+          </div>
+
+          <div className="receipt-details">
+            <div>
+              <span>Status</span>
+
+              <strong>
+                {payment.status || "pending"}
+              </strong>
+            </div>
 
             <div>
-              <span className="eyebrow">
-                SPECIALIZATION
-              </span>
+              <span>Application ID</span>
 
-              <h2>
-                Choose your specialization
-              </h2>
+              <strong>
+                {payment.applicationId || "—"}
+              </strong>
+            </div>
 
-              <p>
-                Select the program that matches your goals.
-              </p>
+            <div>
+              <span>Transaction ID</span>
+
+              <strong>
+                {payment.transactionId ||
+                  "Not generated"}
+              </strong>
+            </div>
+
+            <div>
+              <span>Student Email</span>
+
+              <strong>{user?.email || "—"}</strong>
+            </div>
+
+            <div>
+              <span>Date</span>
+
+              <strong>
+                {formatDateTime(payment.createdAt)}
+              </strong>
             </div>
           </div>
 
-          <div className="custom-select-wrapper">
-            <button
-              className={`custom-select ${
-                !selectedField ? "disabled" : ""
-              } ${openMajor ? "opened" : ""}`}
-              disabled={!selectedField}
-              onClick={() => {
-                setOpenMajor(!openMajor);
-                setOpenField(false);
-                setOpenUniversity(false);
-              }}
-            >
-              <span>
-                {selectedMajor ||
-                  (selectedField
-                    ? "Select specialization"
-                    : "Select a field first")}
-              </span>
+          <div className="receipt-notice">
+            This receipt represents a payment request.
+            Online payment is currently coming soon.
+          </div>
+        </div>
 
-              <span>⌄</span>
+        <div className="modal-footer receipt-actions">
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={onClose}
+          >
+            Close
+          </button>
+
+          <button
+            type="button"
+            className="primary-button"
+            onClick={printReceipt}
+          >
+            Print Receipt
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SupportModal({
+  onClose,
+  onSubmit,
+}) {
+  const [subject, setSubject] = useState("");
+  const [message, setMessage] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+
+    if (!subject.trim() || !message.trim()) {
+      alert("Please complete all fields.");
+      return;
+    }
+
+    setSubmitting(true);
+
+    try {
+      await onSubmit({
+        subject: subject.trim(),
+        message: message.trim(),
+      });
+
+      setSubject("");
+      setMessage("");
+    } catch (error) {
+      alert(
+        error?.message ||
+          "Could not send your support request."
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div
+        className="modal-card support-modal"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="modal-header">
+          <div>
+            <span className="card-kicker">
+              SUPPORT
+            </span>
+
+            <h2>Contact MIDOYOL Support</h2>
+          </div>
+
+          <button
+            type="button"
+            className="modal-close"
+            onClick={onClose}
+          >
+            ×
+          </button>
+        </div>
+
+        <form
+          className="support-form"
+          onSubmit={handleSubmit}
+        >
+          <div className="form-group">
+            <label className="form-label">
+              Subject
+            </label>
+
+            <input
+              className="form-input"
+              type="text"
+              placeholder="How can we help?"
+              value={subject}
+              onChange={(event) =>
+                setSubject(event.target.value)
+              }
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">
+              Message
+            </label>
+
+            <textarea
+              className="form-input form-textarea"
+              placeholder="Tell us what you need help with..."
+              rows="6"
+              value={message}
+              onChange={(event) =>
+                setMessage(event.target.value)
+              }
+            />
+          </div>
+
+          <div className="modal-footer">
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={onClose}
+              disabled={submitting}
+            >
+              Cancel
             </button>
 
-            {openMajor && selectedField && (
-              <div className="select-menu">
-                {majors.map((major) => (
-                  <button
-                    key={major}
-                    onClick={() =>
-                      chooseMajor(major)
-                    }
-                  >
-                    <span>{major}</span>
-                    <span>→</span>
-                  </button>
-                ))}
-              </div>
-            )}
+            <button
+              type="submit"
+              className="primary-button"
+              disabled={submitting}
+            >
+              {submitting
+                ? "Sending..."
+                : "Send Message"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function AuthModal({
+  isRegister,
+  onClose,
+  onSwitch,
+  onLogin,
+  onRegister,
+  onResetPassword,
+}) {
+  const [loading, setLoading] = useState(false);
+  const [showReset, setShowReset] = useState(false);
+
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [dateOfBirth, setDateOfBirth] =
+    useState("");
+  const [country, setCountry] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] =
+    useState("");
+  const [acceptedTerms, setAcceptedTerms] =
+    useState(false);
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+
+    setLoading(true);
+
+    try {
+      if (isRegister) {
+        await onRegister({
+          firstName,
+          lastName,
+          email,
+          dateOfBirth,
+          country,
+          password,
+          confirmPassword,
+          acceptedTerms,
+        });
+      } else {
+        await onLogin(email, password);
+      }
+    } catch (error) {
+      alert(
+        error?.message ||
+          "Something went wrong. Please try again."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleReset() {
+    if (!email.trim()) {
+      alert("Enter your email address first.");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      await onResetPassword(email.trim());
+
+      alert(
+        "Password reset email sent. Please check your inbox."
+      );
+
+      setShowReset(false);
+    } catch (error) {
+      alert(
+        error?.message ||
+          "Could not send the reset email."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div
+        className="modal-card auth-modal"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="modal-header">
+          <div>
+            <div className="brand-box">MIDOYOL</div>
+
+            <h2>
+              {isRegister
+                ? "Create your account"
+                : "Welcome back"}
+            </h2>
+
+            <p>
+              {isRegister
+                ? "Start your university journey with MIDOYOL."
+                : "Sign in to continue your application."}
+            </p>
           </div>
 
-          <div className="form-card-heading second">
-            <span className="step-number">03</span>
+          <button
+            type="button"
+            className="modal-close"
+            onClick={onClose}
+          >
+            ×
+          </button>
+        </div>
 
-            <div>
-              <span className="eyebrow">
-                UNIVERSITY
-              </span>
+        {!isRegister && showReset ? (
+          <div className="reset-password-section">
+            <span className="card-kicker">
+              PASSWORD RESET
+            </span>
 
-              <h2>
-                Choose your university
-              </h2>
+            <h3>Reset your password</h3>
 
-              <p>
-                Select where you would like to apply.
-              </p>
+            <p>
+              Enter your email and we will send you a
+              password reset link.
+            </p>
+
+            <div className="form-group">
+              <label className="form-label">
+                Email
+              </label>
+
+              <input
+                className="form-input"
+                type="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(event) =>
+                  setEmail(event.target.value)
+                }
+              />
+            </div>
+
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setShowReset(false)}
+              >
+                Back
+              </button>
+
+              <button
+                type="button"
+                className="primary-button"
+                disabled={loading}
+                onClick={handleReset}
+              >
+                {loading
+                  ? "Sending..."
+                  : "Send Reset Email"}
+              </button>
             </div>
           </div>
+        ) : (
+          <form
+            className="auth-form"
+            onSubmit={handleSubmit}
+          >
+            {isRegister && (
+              <div className="auth-two-columns">
+                <div className="form-group">
+                  <label className="form-label">
+                    First Name
+                  </label>
 
-          <div className="custom-select-wrapper">
+                  <input
+                    className="form-input"
+                    type="text"
+                    value={firstName}
+                    onChange={(event) =>
+                      setFirstName(event.target.value)
+                    }
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">
+                    Last Name
+                  </label>
+
+                  <input
+                    className="form-input"
+                    type="text"
+                    value={lastName}
+                    onChange={(event) =>
+                      setLastName(event.target.value)
+                    }
+                    required
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="form-group">
+              <label className="form-label">
+                Email
+              </label>
+
+              <input
+                className="form-input"
+                type="email"
+                placeholder="you@example.com"
+                value={email}
+                onChange={(event) =>
+                  setEmail(event.target.value)
+                }
+                required
+              />
+            </div>
+
+            {isRegister && (
+              <>
+                <div className="auth-two-columns">
+                  <div className="form-group">
+                    <label className="form-label">
+                      Date of Birth
+                    </label>
+
+                    <input
+                      className="form-input"
+                      type="date"
+                      value={dateOfBirth}
+                      onChange={(event) =>
+                        setDateOfBirth(
+                          event.target.value
+                        )
+                      }
+                      required
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">
+                      Country
+                    </label>
+
+                    <input
+                      className="form-input"
+                      type="text"
+                      placeholder="Your country"
+                      value={country}
+                      onChange={(event) =>
+                        setCountry(event.target.value)
+                      }
+                      required
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+
+            <div className="form-group">
+              <label className="form-label">
+                Password
+              </label>
+
+              <input
+                className="form-input"
+                type="password"
+                placeholder="At least 6 characters"
+                value={password}
+                onChange={(event) =>
+                  setPassword(event.target.value)
+                }
+                required
+              />
+            </div>
+
+            {isRegister && (
+              <div className="form-group">
+                <label className="form-label">
+                  Confirm Password
+                </label>
+
+                <input
+                  className="form-input"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(event) =>
+                    setConfirmPassword(
+                      event.target.value
+                    )
+                  }
+                  required
+                />
+              </div>
+            )}
+
+            {isRegister && (
+              <label className="terms-check">
+                <input
+                  type="checkbox"
+                  checked={acceptedTerms}
+                  onChange={(event) =>
+                    setAcceptedTerms(
+                      event.target.checked
+                    )
+                  }
+                />
+
+                <span>
+                  I agree to the MIDOYOL terms and
+                  privacy policy.
+                </span>
+              </label>
+            )}
+
             <button
-              className={`custom-select ${
-                !selectedMajor ? "disabled" : ""
-              } ${openUniversity ? "opened" : ""}`}
-             
+              type="submit"
+              className="primary-button auth-submit"
+              disabled={loading}
+            >
+              {loading
+                ? "Please wait..."
+                : isRegister
+                ? "Create Account"
+                : "Login"}
+            </button>
+
+            {!isRegister && (
+              <button
+                type="button"
+                className="text-button"
+                onClick={() => setShowReset(true)}
+              >
+                Forgot your password?
+              </button>
+            )}
+
+            <div className="auth-switch">
+              <span>
+                {isRegister
+                  ? "Already have an account?"
+                  : "Don't have an account?"}
+              </span>
+
+              <button
+                type="button"
+                className="text-button"
+                onClick={onSwitch}
+              >
+                {isRegister ? "Login" : "Sign Up"}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Footer({ onSupport }) {
+  return (
+    <footer className="site-footer">
+      <div className="footer-inner">
+        <div>
+          <div className="brand-box">MIDOYOL</div>
+
+          <p>
+            Your journey to university starts here.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          className="footer-support"
+          onClick={onSupport}
+        >
+          Contact Support
+        </button>
+
+        <div className="footer-bottom">
+          © {new Date().getFullYear()} MIDOYOL. All
+          rights reserved.
+        </div>
+      </div>
+    </footer>
+  );
+}
+
+ReactDOM.createRoot(
+  document.getElementById("root")
+).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
