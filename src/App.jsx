@@ -1,6 +1,16 @@
-import React from "react";
+import React, { useState } from "react";
 
 function App() {
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  const goTo = (id) => {
+    setMenuOpen(false);
+
+    document.getElementById(id)?.scrollIntoView({
+      behavior: "smooth",
+    });
+  };
+
   return (
     <div className="landing">
       {/* =========================
@@ -8,7 +18,15 @@ function App() {
       ========================= */}
       <nav className="navbar">
         <div className="navbar-inner">
-          <a href="#" className="nav-logo">
+          <button
+            className="nav-logo"
+            onClick={() => goTo("home")}
+            style={{
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+            }}
+          >
             <div
               style={{
                 width: "42px",
@@ -27,28 +45,93 @@ function App() {
             </div>
 
             <span>MIDOYOL</span>
-          </a>
+          </button>
 
           <div className="nav-links">
-            <button>Home</button>
-            <button>Universities</button>
-            <button>How It Works</button>
-            <button>About Us</button>
+            <button onClick={() => goTo("home")}>Home</button>
+
+            <button onClick={() => goTo("universities")}>
+              Universities
+            </button>
+
+            <button onClick={() => goTo("how-it-works")}>
+              How It Works
+            </button>
+
+            <button onClick={() => goTo("about")}>
+              About Us
+            </button>
           </div>
 
           <div className="nav-start">
-            <button className="outline-btn">Login</button>
-            <button className="primary-btn">Start Application</button>
+            <button
+              className="outline-btn"
+              onClick={() => alert("Login page coming soon")}
+            >
+              Login
+            </button>
+
+            <button
+              className="primary-btn"
+              onClick={() => alert("Application page coming soon")}
+            >
+              Start Application
+            </button>
           </div>
 
-          <button className="hamburger">☰</button>
+          <button
+            className="hamburger"
+            onClick={() => setMenuOpen(!menuOpen)}
+            aria-label="Open menu"
+          >
+            ☰
+          </button>
         </div>
+
+        {/* Mobile Menu */}
+        {menuOpen && (
+          <div
+            style={{
+              padding: "15px 20px 25px",
+              background: "#fff",
+              display: "flex",
+              flexDirection: "column",
+              gap: "10px",
+            }}
+          >
+            <button onClick={() => goTo("home")}>Home</button>
+
+            <button onClick={() => goTo("universities")}>
+              Universities
+            </button>
+
+            <button onClick={() => goTo("how-it-works")}>
+              How It Works
+            </button>
+
+            <button onClick={() => goTo("about")}>About Us</button>
+
+            <button
+              className="outline-btn"
+              onClick={() => alert("Login page coming soon")}
+            >
+              Login
+            </button>
+
+            <button
+              className="primary-btn"
+              onClick={() => alert("Application page coming soon")}
+            >
+              Start Application
+            </button>
+          </div>
+        )}
       </nav>
 
       {/* =========================
           HERO
       ========================= */}
-      <section className="hero">
+      <section className="hero" id="home">
         <div className="container">
           <div className="hero-grid">
             <div className="hero-content">
@@ -69,19 +152,23 @@ function App() {
               </p>
 
               <div className="hero-actions">
-                <button className="primary-btn">
+                <button
+                  className="primary-btn"
+                  onClick={() => alert("Application page coming soon")}
+                >
                   Start Application →
                 </button>
 
-                <button className="secondary-btn">
+                <button
+                  className="secondary-btn"
+                  onClick={() => goTo("universities")}
+                >
                   Explore Universities
                 </button>
               </div>
             </div>
 
-            {/* =========================
-                GLOBE
-            ========================= */}
+            {/* GLOBE */}
             <div className="hero-visual">
               <div className="globe">
                 <div className="globe-grid"></div>
@@ -99,10 +186,11 @@ function App() {
       {/* =========================
           HOW IT WORKS
       ========================= */}
-      <section className="section">
+      <section className="section" id="how-it-works">
         <div className="container">
           <div className="section-title">
             <h2>How It Works</h2>
+
             <p>
               A simple and easy process designed to help students reach their
               university goals.
@@ -112,9 +200,7 @@ function App() {
           <div className="steps-grid">
             <div className="step-card">
               <div className="step-number">1</div>
-
               <h3>Create Account</h3>
-
               <p>
                 Create your MIDOYOL account and start your application journey.
               </p>
@@ -122,9 +208,7 @@ function App() {
 
             <div className="step-card">
               <div className="step-number">2</div>
-
               <h3>Choose University</h3>
-
               <p>
                 Explore universities and select the program that fits you.
               </p>
@@ -132,9 +216,7 @@ function App() {
 
             <div className="step-card">
               <div className="step-number">3</div>
-
               <h3>Submit Documents</h3>
-
               <p>
                 Upload your documents and complete your application online.
               </p>
@@ -142,9 +224,7 @@ function App() {
 
             <div className="step-card">
               <div className="step-number">4</div>
-
               <h3>Track Application</h3>
-
               <p>
                 Follow every stage of your application directly from your
                 dashboard.
@@ -157,7 +237,7 @@ function App() {
       {/* =========================
           UNIVERSITIES
       ========================= */}
-      <section className="section">
+      <section className="section" id="universities">
         <div className="container">
           <div className="section-title">
             <h2>Find Your University</h2>
@@ -180,7 +260,14 @@ function App() {
                   opportunities.
                 </p>
 
-                <button className="outline-btn">View University</button>
+                <button
+                  className="outline-btn"
+                  onClick={() =>
+                    alert("Istanbul Gelisim University coming soon")
+                  }
+                >
+                  View University
+                </button>
               </div>
             </div>
 
@@ -194,7 +281,14 @@ function App() {
                   Discover undergraduate programs and start your application.
                 </p>
 
-                <button className="outline-btn">View University</button>
+                <button
+                  className="outline-btn"
+                  onClick={() =>
+                    alert("Istanbul Aydin University coming soon")
+                  }
+                >
+                  View University
+                </button>
               </div>
             </div>
 
@@ -209,9 +303,32 @@ function App() {
                   your goals.
                 </p>
 
-                <button className="primary-btn">Explore All</button>
+                <button
+                  className="primary-btn"
+                  onClick={() =>
+                    alert("All universities page coming soon")
+                  }
+                >
+                  Explore All
+                </button>
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* =========================
+          ABOUT
+      ========================= */}
+      <section className="section" id="about">
+        <div className="container">
+          <div className="section-title">
+            <h2>About MIDOYOL</h2>
+
+            <p>
+              MIDOYOL is designed to make the university admission journey
+              simpler, clearer, and easier for students.
+            </p>
           </div>
         </div>
       </section>
@@ -228,7 +345,10 @@ function App() {
               Take the first step toward your university future with MIDOYOL.
             </p>
 
-            <button className="primary-btn">
+            <button
+              className="primary-btn"
+              onClick={() => alert("Application page coming soon")}
+            >
               Start Your Application →
             </button>
           </div>
@@ -272,9 +392,17 @@ function App() {
               <h4>Platform</h4>
 
               <div className="footer-links">
-                <button>Universities</button>
-                <button>How It Works</button>
-                <button>Start Application</button>
+                <button onClick={() => goTo("universities")}>
+                  Universities
+                </button>
+
+                <button onClick={() => goTo("how-it-works")}>
+                  How It Works
+                </button>
+
+                <button onClick={() => alert("Application page coming soon")}>
+                  Start Application
+                </button>
               </div>
             </div>
 
@@ -282,9 +410,17 @@ function App() {
               <h4>Support</h4>
 
               <div className="footer-links">
-                <button>Contact Us</button>
-                <button>Help Center</button>
-                <button>Student Support</button>
+                <button onClick={() => alert("Contact page coming soon")}>
+                  Contact Us
+                </button>
+
+                <button onClick={() => alert("Help Center coming soon")}>
+                  Help Center
+                </button>
+
+                <button onClick={() => alert("Student Support coming soon")}>
+                  Student Support
+                </button>
               </div>
             </div>
           </div>
