@@ -7,22 +7,29 @@ import {
   signOut,
   updateProfile,
 } from "firebase/auth";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+
+import {
+  doc,
+  getDoc,
+  setDoc,
+} from "firebase/firestore";
 
 import { auth, db } from "./firebase";
 
 function App() {
+  /* =========================
+     GENERAL
+  ========================= */
+
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // =========================
-  // AUTH STATE
-  // =========================
+  /* =========================
+     AUTH
+  ========================= */
+
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
 
-  // =========================
-  // AUTH MODAL
-  // =========================
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState("login");
 
@@ -35,82 +42,372 @@ function App() {
   const [authSuccess, setAuthSuccess] = useState("");
   const [authSubmitting, setAuthSubmitting] = useState(false);
 
-  // =========================
-  // APPLICATION
-  // =========================
+  /* =========================
+     APPLICATION
+  ========================= */
+
   const [applicationLoading, setApplicationLoading] = useState(false);
 
   const [selectedField, setSelectedField] = useState("");
+  const [selectedFieldName, setSelectedFieldName] = useState("");
 
-  // =========================
-  // FIELDS
-  // =========================
+  const [selectedMajor, setSelectedMajor] = useState("");
+  const [selectedMajorName, setSelectedMajorName] = useState("");
+
+  const [applicationStep, setApplicationStep] = useState("field");
+  const [showMajorStep, setShowMajorStep] = useState(false);
+
+  /* =========================
+     FIELDS
+  ========================= */
+
   const fields = [
     {
       id: "computer-it",
       name: "Computer & IT",
       description:
-        "Computer science, software, artificial intelligence, cybersecurity and information technology.",
+        "Technology, software, artificial intelligence, data and information systems.",
     },
     {
       id: "engineering",
       name: "Engineering",
       description:
-        "Mechanical, civil, electrical, industrial, mechatronics and other engineering programs.",
+        "Engineering programs covering technology, construction, industry and energy.",
     },
     {
       id: "medicine-health",
       name: "Medicine & Health Sciences",
       description:
-        "Medicine, dentistry, pharmacy, nursing and other health-related programs.",
+        "Medical, dental, pharmacy, nursing and other health-related programs.",
     },
     {
       id: "business-economics",
       name: "Business & Economics",
       description:
-        "Business administration, economics, finance, accounting, marketing and management.",
+        "Business, finance, economics, accounting, marketing and management.",
     },
     {
-      id: "law-social-sciences",
+      id: "law-social",
       name: "Law & Social Sciences",
       description:
-        "Law, political science, international relations, psychology, sociology and public administration.",
+        "Law, political science, international relations, psychology and social sciences.",
     },
     {
       id: "architecture-design",
       name: "Architecture & Design",
       description:
-        "Architecture, interior architecture, industrial design, graphic design and urban design.",
+        "Architecture, interior architecture, industrial design and visual design.",
     },
     {
       id: "communication-media",
       name: "Communication & Media",
       description:
-        "Communication, journalism, public relations, advertising, television and cinema.",
+        "Communication, journalism, public relations, cinema and advertising.",
     },
     {
       id: "education",
       name: "Education",
       description:
-        "Teaching, early childhood education, mathematics education, special education and educational sciences.",
+        "Teaching, education sciences, mathematics, languages and special education.",
     },
     {
       id: "aviation",
       name: "Aviation",
       description:
-        "Pilotage, aviation management, air transport management, aircraft technology and cabin services.",
+        "Pilotage, aviation management, air transport and aviation-related programs.",
     },
     {
       id: "tourism-hospitality",
       name: "Tourism & Hospitality",
       description:
-        "Tourism management, hotel management, gastronomy, travel management and tourism guidance.",
+        "Tourism, hotels, gastronomy, travel management and tourism guidance.",
     },
   ];
 
-  // =========================
-  // AUTH LISTENER
-  // =========================
+  /* =========================
+     MAJORS
+  ========================= */
+
+  const majorsByField = {
+    "computer-it": [
+      {
+        id: "computer-engineering",
+        name: "Computer Engineering",
+      },
+      {
+        id: "software-engineering",
+        name: "Software Engineering",
+      },
+      {
+        id: "artificial-intelligence",
+        name: "Artificial Intelligence",
+      },
+      {
+        id: "information-systems",
+        name: "Information Systems",
+      },
+      {
+        id: "cyber-security",
+        name: "Cyber Security",
+      },
+      {
+        id: "data-science",
+        name: "Data Science",
+      },
+      {
+        id: "computer-science",
+        name: "Computer Science",
+      },
+    ],
+
+    engineering: [
+      {
+        id: "mechanical-engineering",
+        name: "Mechanical Engineering",
+      },
+      {
+        id: "civil-engineering",
+        name: "Civil Engineering",
+      },
+      {
+        id: "electrical-electronics",
+        name: "Electrical & Electronics Engineering",
+      },
+      {
+        id: "industrial-engineering",
+        name: "Industrial Engineering",
+      },
+      {
+        id: "mechatronics-engineering",
+        name: "Mechatronics Engineering",
+      },
+      {
+        id: "chemical-engineering",
+        name: "Chemical Engineering",
+      },
+      {
+        id: "environmental-engineering",
+        name: "Environmental Engineering",
+      },
+    ],
+
+    "medicine-health": [
+      {
+        id: "medicine",
+        name: "Medicine",
+      },
+      {
+        id: "dentistry",
+        name: "Dentistry",
+      },
+      {
+        id: "pharmacy",
+        name: "Pharmacy",
+      },
+      {
+        id: "nursing",
+        name: "Nursing",
+      },
+      {
+        id: "physiotherapy",
+        name: "Physiotherapy",
+      },
+      {
+        id: "nutrition-dietetics",
+        name: "Nutrition & Dietetics",
+      },
+      {
+        id: "medical-laboratory",
+        name: "Medical Laboratory",
+      },
+    ],
+
+    "business-economics": [
+      {
+        id: "business-administration",
+        name: "Business Administration",
+      },
+      {
+        id: "economics",
+        name: "Economics",
+      },
+      {
+        id: "finance",
+        name: "Finance",
+      },
+      {
+        id: "international-trade",
+        name: "International Trade",
+      },
+      {
+        id: "accounting",
+        name: "Accounting",
+      },
+      {
+        id: "marketing",
+        name: "Marketing",
+      },
+      {
+        id: "management",
+        name: "Management",
+      },
+    ],
+
+    "law-social": [
+      {
+        id: "law",
+        name: "Law",
+      },
+      {
+        id: "political-science",
+        name: "Political Science",
+      },
+      {
+        id: "international-relations",
+        name: "International Relations",
+      },
+      {
+        id: "psychology",
+        name: "Psychology",
+      },
+      {
+        id: "sociology",
+        name: "Sociology",
+      },
+      {
+        id: "public-administration",
+        name: "Public Administration",
+      },
+    ],
+
+    "architecture-design": [
+      {
+        id: "architecture",
+        name: "Architecture",
+      },
+      {
+        id: "interior-architecture",
+        name: "Interior Architecture",
+      },
+      {
+        id: "industrial-design",
+        name: "Industrial Design",
+      },
+      {
+        id: "graphic-design",
+        name: "Graphic Design",
+      },
+      {
+        id: "urban-design",
+        name: "Urban Design",
+      },
+    ],
+
+    "communication-media": [
+      {
+        id: "communication",
+        name: "Communication",
+      },
+      {
+        id: "media-communication",
+        name: "Media and Communication",
+      },
+      {
+        id: "journalism",
+        name: "Journalism",
+      },
+      {
+        id: "public-relations",
+        name: "Public Relations",
+      },
+      {
+        id: "radio-tv-cinema",
+        name: "Radio / TV / Cinema",
+      },
+      {
+        id: "advertising",
+        name: "Advertising",
+      },
+    ],
+
+    education: [
+      {
+        id: "elementary-education",
+        name: "Elementary Education",
+      },
+      {
+        id: "early-childhood",
+        name: "Early Childhood Education",
+      },
+      {
+        id: "english-language-teaching",
+        name: "English Language Teaching",
+      },
+      {
+        id: "mathematics-education",
+        name: "Mathematics Education",
+      },
+      {
+        id: "special-education",
+        name: "Special Education",
+      },
+      {
+        id: "educational-sciences",
+        name: "Educational Sciences",
+      },
+    ],
+
+    aviation: [
+      {
+        id: "pilotage",
+        name: "Pilotage",
+      },
+      {
+        id: "aviation-management",
+        name: "Aviation Management",
+      },
+      {
+        id: "air-transport-management",
+        name: "Air Transport Management",
+      },
+      {
+        id: "aircraft-technology",
+        name: "Aircraft Technology",
+      },
+      {
+        id: "cabin-services",
+        name: "Cabin Services",
+      },
+    ],
+
+    "tourism-hospitality": [
+      {
+        id: "tourism-management",
+        name: "Tourism Management",
+      },
+      {
+        id: "hotel-management",
+        name: "Hotel Management",
+      },
+      {
+        id: "gastronomy",
+        name: "Gastronomy",
+      },
+      {
+        id: "travel-management",
+        name: "Travel Management",
+      },
+      {
+        id: "tourism-guidance",
+        name: "Tourism Guidance",
+      },
+    ],
+  };
+
+  /* =========================
+     AUTH STATE
+  ========================= */
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
@@ -119,6 +416,11 @@ function App() {
         await loadApplication(currentUser.uid);
       } else {
         setSelectedField("");
+        setSelectedFieldName("");
+        setSelectedMajor("");
+        setSelectedMajorName("");
+        setApplicationStep("field");
+        setShowMajorStep(false);
       }
 
       setAuthLoading(false);
@@ -127,21 +429,40 @@ function App() {
     return () => unsubscribe();
   }, []);
 
-  // =========================
-  // LOAD APPLICATION
-  // =========================
+  /* =========================
+     LOAD APPLICATION
+  ========================= */
+
   const loadApplication = async (uid) => {
     try {
       setApplicationLoading(true);
 
-      const applicationRef = doc(db, "users", uid);
-      const applicationSnap = await getDoc(applicationRef);
+      const userRef = doc(db, "users", uid);
+      const userSnap = await getDoc(userRef);
 
-      if (applicationSnap.exists()) {
-        const data = applicationSnap.data();
+      if (userSnap.exists()) {
+        const data = userSnap.data();
 
         if (data.selectedField) {
           setSelectedField(data.selectedField);
+          setSelectedFieldName(
+            data.selectedFieldName || ""
+          );
+        }
+
+        if (data.selectedMajor) {
+          setSelectedMajor(data.selectedMajor);
+          setSelectedMajorName(
+            data.selectedMajorName || ""
+          );
+        }
+
+        if (data.applicationStep) {
+          setApplicationStep(data.applicationStep);
+
+          if (data.applicationStep === "major") {
+            setShowMajorStep(true);
+          }
         }
       }
     } catch (error) {
@@ -151,74 +472,74 @@ function App() {
     }
   };
 
-  // =========================
-  // NAVIGATION
-  // =========================
+  /* =========================
+     NAVIGATION
+  ========================= */
+
   const goTo = (id) => {
     setMenuOpen(false);
 
-    document.getElementById(id)?.scrollIntoView({
-      behavior: "smooth",
-    });
+    const element = document.getElementById(id);
+
+    if (element) {
+      element.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }
   };
 
-  // =========================
-  // OPEN LOGIN
-  // =========================
+  /* =========================
+     AUTH MODAL
+  ========================= */
+
   const openLogin = () => {
     setAuthMode("login");
-    setAuthModalOpen(true);
     setAuthError("");
     setAuthSuccess("");
-    setPassword("");
-    setConfirmPassword("");
+    setAuthModalOpen(true);
   };
 
-  // =========================
-  // OPEN REGISTER
-  // =========================
   const openRegister = () => {
     setAuthMode("register");
-    setAuthModalOpen(true);
     setAuthError("");
     setAuthSuccess("");
-    setPassword("");
-    setConfirmPassword("");
+    setAuthModalOpen(true);
   };
 
-  // =========================
-  // CLOSE AUTH
-  // =========================
   const closeAuth = () => {
+    if (authSubmitting) return;
+
     setAuthModalOpen(false);
     setAuthError("");
     setAuthSuccess("");
-    setPassword("");
-    setConfirmPassword("");
   };
 
-  // =========================
-  // LOGIN / REGISTER
-  // =========================
+  /* =========================
+     AUTH
+  ========================= */
+
   const handleAuth = async (e) => {
     e.preventDefault();
 
     setAuthError("");
     setAuthSuccess("");
 
-    if (!email.trim() || !password) {
+    if (!email || !password) {
       setAuthError("Please enter your email and password.");
       return;
     }
 
     if (authMode === "register") {
       if (!name.trim()) {
-        setAuthError("Please enter your full name.");
+        setAuthError("Please enter your name.");
         return;
       }
 
       if (password.length < 6) {
-        setAuthError("Password must be at least 6 characters.");
+        setAuthError(
+          "Password must be at least 6 characters."
+        );
         return;
       }
 
@@ -232,141 +553,145 @@ function App() {
       setAuthSubmitting(true);
 
       if (authMode === "register") {
-        const result = await createUserWithEmailAndPassword(
-          auth,
-          email.trim(),
-          password
-        );
+        const result =
+          await createUserWithEmailAndPassword(
+            auth,
+            email,
+            password
+          );
 
         await updateProfile(result.user, {
           displayName: name.trim(),
         });
 
-        await setDoc(doc(db, "users", result.user.uid), {
-          uid: result.user.uid,
-          name: name.trim(),
-          email: email.trim(),
-          createdAt: new Date().toISOString(),
-          role: "student",
-        });
+        await setDoc(
+          doc(db, "users", result.user.uid),
+          {
+            uid: result.user.uid,
+            name: name.trim(),
+            email: email,
+            createdAt: new Date().toISOString(),
+            applicationStep: "field",
+          },
+          { merge: true }
+        );
 
         setAuthSuccess(
-          "Account created successfully. Welcome to MIDOYOL!"
+          "Your account has been created successfully."
         );
 
         setTimeout(() => {
-          closeAuth();
-        }, 1200);
+          setAuthModalOpen(false);
+        }, 800);
       } else {
         await signInWithEmailAndPassword(
           auth,
-          email.trim(),
+          email,
           password
         );
 
-        setAuthSuccess("Login successful. Welcome back!");
+        setAuthSuccess("Login successful.");
 
         setTimeout(() => {
-          closeAuth();
-        }, 900);
+          setAuthModalOpen(false);
+        }, 500);
       }
     } catch (error) {
       console.error(error);
 
-      switch (error.code) {
-        case "auth/email-already-in-use":
-          setAuthError(
-            "This email is already registered. Please login instead."
-          );
-          break;
-
-        case "auth/invalid-email":
-          setAuthError("Please enter a valid email address.");
-          break;
-
-        case "auth/weak-password":
-          setAuthError(
-            "Password is too weak. Please use at least 6 characters."
-          );
-          break;
-
-        case "auth/invalid-credential":
-        case "auth/wrong-password":
-        case "auth/user-not-found":
-          setAuthError("Incorrect email or password.");
-          break;
-
-        case "auth/too-many-requests":
-          setAuthError(
-            "Too many attempts. Please wait a little and try again."
-          );
-          break;
-
-        default:
-          setAuthError(
-            error.message || "Something went wrong. Please try again."
-          );
+      if (error.code === "auth/email-already-in-use") {
+        setAuthError(
+          "This email is already registered."
+        );
+      } else if (error.code === "auth/invalid-email") {
+        setAuthError("Please enter a valid email.");
+      } else if (
+        error.code === "auth/invalid-credential"
+      ) {
+        setAuthError(
+          "Incorrect email or password."
+        );
+      } else if (
+        error.code === "auth/weak-password"
+      ) {
+        setAuthError(
+          "Password must be at least 6 characters."
+        );
+      } else {
+        setAuthError(
+          error.message || "Something went wrong."
+        );
       }
     } finally {
       setAuthSubmitting(false);
     }
   };
 
-  // =========================
-  // FORGOT PASSWORD
-  // =========================
+  /* =========================
+     FORGOT PASSWORD
+  ========================= */
+
   const handleForgotPassword = async () => {
     setAuthError("");
     setAuthSuccess("");
 
-    if (!email.trim()) {
+    if (!email) {
       setAuthError(
-        "Enter your email first, then click Forgot password."
+        "Enter your email first."
       );
       return;
     }
 
     try {
-      await sendPasswordResetEmail(auth, email.trim());
+      await sendPasswordResetEmail(
+        auth,
+        email
+      );
 
       setAuthSuccess(
-        "Password reset email sent. Please check your inbox."
+        "Password reset email sent."
       );
     } catch (error) {
       console.error(error);
 
-      if (error.code === "auth/user-not-found") {
-        setAuthError("No account was found with this email.");
-      } else if (error.code === "auth/invalid-email") {
-        setAuthError("Please enter a valid email address.");
-      } else {
-        setAuthError(
-          "Unable to send reset email. Please try again."
-        );
-      }
+      setAuthError(
+        error.message ||
+          "Unable to send reset email."
+      );
     }
   };
 
-  // =========================
-  // LOGOUT
-  // =========================
+  /* =========================
+     LOGOUT
+  ========================= */
+
   const handleLogout = async () => {
     try {
       await signOut(auth);
-      setMenuOpen(false);
+
+      setSelectedField("");
+      setSelectedFieldName("");
+      setSelectedMajor("");
+      setSelectedMajorName("");
+      setApplicationStep("field");
+      setShowMajorStep(false);
     } catch (error) {
       console.error(error);
     }
   };
 
-  // =========================
-  // START APPLICATION
-  // =========================
+  /* =========================
+     START APPLICATION
+  ========================= */
+
   const startApplication = () => {
     if (!user) {
       openLogin();
       return;
     }
+
+    setApplicationStep("field");
+    setShowMajorStep(false);
 
     window.scrollTo({
       top: 0,
@@ -374,176 +699,236 @@ function App() {
     });
   };
 
-  // =========================
-  // SELECT FIELD
-  // =========================
+  /* =========================
+     SELECT FIELD
+  ========================= */
+
   const handleFieldSelect = async (field) => {
-    if (!user) {
-      openLogin();
-      return;
-    }
+    if (!user) return;
 
     try {
-      setApplicationLoading(true);
-
       setSelectedField(field.id);
+      setSelectedFieldName(field.name);
+
+      /*
+        When changing the field, the old major
+        must not remain selected.
+      */
+
+      setSelectedMajor("");
+      setSelectedMajorName("");
 
       await setDoc(
         doc(db, "users", user.uid),
         {
           selectedField: field.id,
           selectedFieldName: field.name,
+          selectedMajor: "",
+          selectedMajorName: "",
           applicationStep: "field",
           updatedAt: new Date().toISOString(),
         },
-        {
-          merge: true,
-        }
+        { merge: true }
       );
+
+      setApplicationStep("field");
     } catch (error) {
-      console.error("Error saving field:", error);
-    } finally {
-      setApplicationLoading(false);
+      console.error(
+        "Error saving field:",
+        error
+      );
+
+      alert(
+        "We couldn't save your field. Please try again."
+      );
     }
   };
 
-  // =========================
-  // LOADING
-  // =========================
+  /* =========================
+     CONTINUE TO MAJOR
+  ========================= */
+
+  const continueToMajor = () => {
+    if (!selectedField) {
+      alert("Please select a field first.");
+      return;
+    }
+
+    setShowMajorStep(true);
+
+    setTimeout(() => {
+      const element =
+        document.getElementById("major-section");
+
+      if (element) {
+        element.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }
+    }, 100);
+  };
+
+  /* =========================
+     SELECT MAJOR
+  ========================= */
+
+  const handleMajorSelect = async (major) => {
+    if (!user || !selectedField) return;
+
+    try {
+      setSelectedMajor(major.id);
+      setSelectedMajorName(major.name);
+
+      await setDoc(
+        doc(db, "users", user.uid),
+        {
+          selectedField,
+          selectedFieldName,
+          selectedMajor: major.id,
+          selectedMajorName: major.name,
+          applicationStep: "major",
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
+
+      setApplicationStep("major");
+    } catch (error) {
+      console.error(
+        "Error saving major:",
+        error
+      );
+
+      alert(
+        "We couldn't save your major. Please try again."
+      );
+    }
+  };
+
+  /* =========================
+     LOADING
+  ========================= */
+
   if (authLoading) {
     return (
-      <div className="loading-screen">
-        <div className="loading-box">
-          <div
-            style={{
-              width: "75px",
-              height: "75px",
-              borderRadius: "18px",
-              background: "#65b9f5",
-              color: "#fff",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontWeight: "900",
-              fontSize: "30px",
-              margin: "0 auto 22px",
-              boxShadow: "0 18px 50px rgba(28, 83, 125, 0.10)",
-            }}
-          >
-            M
-          </div>
-
-          <div className="spinner"></div>
+      <div
+        style={{
+          minHeight: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "#eaf6ff",
+          fontFamily: "Arial, sans-serif",
+          color: "#1c3144",
+        }}
+      >
+        <div
+          style={{
+            background: "#fff",
+            padding: "30px 40px",
+            borderRadius: "18px",
+            boxShadow:
+              "0 10px 30px rgba(0,0,0,0.08)",
+          }}
+        >
+          Loading MIDOYOL...
         </div>
       </div>
     );
   }
 
-  // ============================================================
-  // LOGGED-IN APPLICATION PAGE
-  // ============================================================
+  /* =========================
+     LOGGED-IN APPLICATION
+  ========================= */
+
   if (user) {
+    const availableMajors =
+      majorsByField[selectedField] || [];
+
     return (
       <div
         style={{
           minHeight: "100vh",
-          background: "#f6fbff",
-          fontFamily: "Arial, sans-serif",
+          background: "#f7fcff",
+          fontFamily:
+            "Arial, Helvetica, sans-serif",
+          color: "#172b3a",
         }}
       >
-        {/* APPLICATION NAVBAR */}
+        {/* NAVBAR */}
+
         <nav
           style={{
-            background: "#ffffff",
-            borderBottom: "1px solid #e5f2fa",
             position: "sticky",
             top: 0,
-            zIndex: 50,
+            zIndex: 100,
+            background: "#ffffff",
+            borderBottom:
+              "1px solid #e5eef5",
+            padding: "16px 24px",
           }}
         >
           <div
             style={{
               maxWidth: "1180px",
-              margin: "0 auto",
-              padding: "16px 22px",
+              margin: "auto",
               display: "flex",
-              alignItems: "center",
               justifyContent: "space-between",
-              gap: "20px",
+              alignItems: "center",
+              gap: "15px",
             }}
           >
-            <button
-              onClick={() => {
-                setSelectedField("");
-                window.scrollTo({
-                  top: 0,
-                  behavior: "smooth",
-                });
-              }}
+            <div
               style={{
-                background: "none",
-                border: "none",
-                cursor: "pointer",
+                fontSize: "28px",
+                fontWeight: "800",
                 color: "#65b9f5",
-                fontSize: "25px",
-                fontWeight: "900",
-                letterSpacing: "1px",
+                letterSpacing: "-1px",
               }}
             >
               MIDOYOL
-            </button>
+            </div>
 
-            <div
+            <button
+              onClick={handleLogout}
               style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "14px",
+                border: "none",
+                background: "#65b9f5",
+                color: "#fff",
+                padding: "11px 20px",
+                borderRadius: "10px",
+                cursor: "pointer",
+                fontWeight: "700",
               }}
             >
-              <span
-                style={{
-                  color: "#526273",
-                  fontSize: "14px",
-                  display: window.innerWidth < 600 ? "none" : "block",
-                }}
-              >
-                {user.displayName || user.email}
-              </span>
-
-              <button
-                className="outline-btn"
-                onClick={handleLogout}
-              >
-                Logout
-              </button>
-            </div>
+              Logout
+            </button>
           </div>
         </nav>
 
-        {/* APPLICATION HEADER */}
+        {/* APPLICATION */}
+
         <main
           style={{
-            maxWidth: "1100px",
-            margin: "0 auto",
-            padding: "42px 20px 70px",
+            maxWidth: "1180px",
+            margin: "auto",
+            padding: "45px 20px 80px",
           }}
         >
+          {/* HEADER */}
+
           <div
             style={{
-              textAlign: "center",
               marginBottom: "35px",
             }}
           >
             <div
               style={{
-                display: "inline-block",
-                padding: "8px 15px",
-                borderRadius: "30px",
-                background: "#eaf6ff",
-                color: "#3b9ee8",
-                fontSize: "13px",
+                fontSize: "14px",
+                color: "#65b9f5",
                 fontWeight: "700",
-                marginBottom: "15px",
+                marginBottom: "10px",
               }}
             >
               MIDOYOL APPLICATION
@@ -551,10 +936,10 @@ function App() {
 
             <h1
               style={{
-                margin: "0 0 10px",
-                color: "#172b3d",
-                fontSize: "clamp(28px, 5vw, 42px)",
-                fontWeight: "800",
+                margin: 0,
+                fontSize: "38px",
+                lineHeight: 1.2,
+                marginBottom: "12px",
               }}
             >
               Start Your University Journey
@@ -563,33 +948,35 @@ function App() {
             <p
               style={{
                 margin: 0,
-                color: "#687889",
+                color: "#71808d",
                 fontSize: "16px",
-                lineHeight: 1.6,
               }}
             >
-              First, tell us which field you want to study.
+              Choose your field and major to
+              continue your application.
             </p>
           </div>
 
           {/* PROGRESS */}
+
           <div
             style={{
-              background: "#ffffff",
-              border: "1px solid #e5f2fa",
+              background: "#fff",
               borderRadius: "18px",
-              padding: "20px",
-              marginBottom: "32px",
-              boxShadow: "0 8px 30px rgba(50, 100, 140, 0.05)",
+              padding: "22px",
+              marginBottom: "35px",
+              boxShadow:
+                "0 8px 30px rgba(44, 110, 150, 0.07)",
+              overflowX: "auto",
             }}
           >
             <div
               style={{
-                display: "grid",
-                gridTemplateColumns:
-                  "repeat(8, minmax(70px, 1fr))",
-                gap: "6px",
-                overflowX: "auto",
+                display: "flex",
+                minWidth: "750px",
+                justifyContent:
+                  "space-between",
+                gap: "10px",
               }}
             >
               {[
@@ -601,68 +988,121 @@ function App() {
                 "Documents",
                 "Payment",
                 "Tracking",
-              ].map((step, index) => (
-                <div
-                  key={step}
-                  style={{
-                    textAlign: "center",
-                    minWidth: "70px",
-                  }}
-                >
+              ].map((step, index) => {
+                const stepNumber = index + 1;
+
+                let active = false;
+                let completed = false;
+
+                if (step === "Field") {
+                  active =
+                    applicationStep ===
+                      "field" &&
+                    !showMajorStep;
+
+                  completed =
+                    !!selectedField &&
+                    (showMajorStep ||
+                      applicationStep ===
+                        "major");
+                }
+
+                if (step === "Major") {
+                  active =
+                    showMajorStep ||
+                    applicationStep ===
+                      "major";
+
+                  completed =
+                    !!selectedMajor;
+                }
+
+                return (
                   <div
+                    key={step}
                     style={{
-                      width: "32px",
-                      height: "32px",
-                      borderRadius: "50%",
-                      margin: "0 auto 7px",
                       display: "flex",
                       alignItems: "center",
-                      justifyContent: "center",
-                      background:
-                        index === 0
-                          ? "#65b9f5"
-                          : "#edf4f8",
-                      color:
-                        index === 0
-                          ? "#ffffff"
-                          : "#91a1af",
-                      fontSize: "13px",
-                      fontWeight: "800",
+                      gap: "8px",
+                      flex: 1,
                     }}
                   >
-                    {index + 1}
-                  </div>
+                    <div
+                      style={{
+                        width: "30px",
+                        height: "30px",
+                        minWidth: "30px",
+                        borderRadius: "50%",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent:
+                          "center",
+                        background:
+                          completed ||
+                          active
+                            ? "#65b9f5"
+                            : "#edf3f7",
+                        color:
+                          completed ||
+                          active
+                            ? "#fff"
+                            : "#8a9aa7",
+                        fontSize: "13px",
+                        fontWeight: "700",
+                      }}
+                    >
+                      {completed
+                        ? "✓"
+                        : stepNumber}
+                    </div>
 
-                  <div
-                    style={{
-                      color:
-                        index === 0
-                          ? "#3b9ee8"
-                          : "#91a1af",
-                      fontSize: "11px",
-                      fontWeight: "700",
-                    }}
-                  >
-                    {step}
+                    <span
+                      style={{
+                        fontSize: "13px",
+                        fontWeight:
+                          active ||
+                          completed
+                            ? "700"
+                            : "500",
+                        color:
+                          active ||
+                          completed
+                            ? "#243b4a"
+                            : "#8a9aa7",
+                        whiteSpace:
+                          "nowrap",
+                      }}
+                    >
+                      {step}
+                    </span>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
           {/* FIELD SECTION */}
-          <section>
+
+          <section
+            id="field-section"
+            style={{
+              background: "#fff",
+              borderRadius: "22px",
+              padding: "30px",
+              marginBottom: "30px",
+              boxShadow:
+                "0 8px 30px rgba(44, 110, 150, 0.07)",
+            }}
+          >
             <div
               style={{
-                marginBottom: "22px",
+                marginBottom: "25px",
               }}
             >
               <h2
                 style={{
                   margin: "0 0 8px",
-                  color: "#172b3d",
-                  fontSize: "25px",
-                  fontWeight: "800",
+                  fontSize: "27px",
                 }}
               >
                 Choose Your Field
@@ -671,186 +1111,152 @@ function App() {
               <p
                 style={{
                   margin: 0,
-                  color: "#718191",
-                  fontSize: "14px",
-                  lineHeight: 1.6,
+                  color: "#71808d",
                 }}
               >
-                Select the academic field you are interested in.
-                Your majors will be shown next based on your choice.
+                Select the academic field you
+                want to study.
               </p>
             </div>
-
-            {applicationLoading && (
-              <div
-                style={{
-                  textAlign: "center",
-                  padding: "15px",
-                  color: "#65b9f5",
-                  fontWeight: "600",
-                }}
-              >
-                Saving...
-              </div>
-            )}
 
             <div
               style={{
                 display: "grid",
                 gridTemplateColumns:
-                  "repeat(auto-fit, minmax(260px, 1fr))",
-                gap: "18px",
+                  "repeat(auto-fit, minmax(230px, 1fr))",
+                gap: "16px",
               }}
             >
               {fields.map((field) => {
-                const isSelected =
+                const selected =
                   selectedField === field.id;
 
                 return (
                   <button
                     key={field.id}
-                    onClick={() => handleFieldSelect(field)}
-                    disabled={applicationLoading}
+                    onClick={() =>
+                      handleFieldSelect(
+                        field
+                      )
+                    }
                     style={{
                       textAlign: "left",
-                      border: isSelected
-                        ? "2px solid #65b9f5"
-                        : "1px solid #e2edf4",
-                      background: isSelected
-                        ? "#f0f9ff"
+                      background: selected
+                        ? "#eaf6ff"
                         : "#ffffff",
-                      borderRadius: "18px",
-                      padding: "23px",
-                      cursor: applicationLoading
-                        ? "wait"
-                        : "pointer",
-                      transition: "all 0.2s ease",
-                      boxShadow: isSelected
-                        ? "0 10px 30px rgba(101, 185, 245, 0.14)"
-                        : "0 7px 22px rgba(50, 100, 140, 0.04)",
+                      border: selected
+                        ? "2px solid #65b9f5"
+                        : "1px solid #e0eaf0",
+                      borderRadius: "16px",
+                      padding: "20px",
+                      cursor: "pointer",
+                      transition:
+                        "all 0.2s ease",
                     }}
                   >
                     <div
                       style={{
                         display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        gap: "15px",
-                        marginBottom: "12px",
+                        justifyContent:
+                          "space-between",
+                        alignItems:
+                          "flex-start",
+                        gap: "10px",
                       }}
                     >
                       <h3
                         style={{
                           margin: 0,
-                          color: "#1c3448",
-                          fontSize: "18px",
-                          fontWeight: "800",
+                          fontSize: "17px",
+                          color:
+                            "#1d3444",
                         }}
                       >
                         {field.name}
                       </h3>
 
-                      <div
-                        style={{
-                          width: "28px",
-                          height: "28px",
-                          borderRadius: "50%",
-                          border: isSelected
-                            ? "none"
-                            : "1px solid #d6e5ee",
-                          background: isSelected
-                            ? "#65b9f5"
-                            : "#ffffff",
-                          color: "#ffffff",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          flexShrink: 0,
-                          fontWeight: "800",
-                          fontSize: "15px",
-                        }}
-                      >
-                        {isSelected ? "✓" : ""}
-                      </div>
+                      {selected && (
+                        <span
+                          style={{
+                            color:
+                              "#65b9f5",
+                            fontWeight:
+                              "800",
+                          }}
+                        >
+                          ✓
+                        </span>
+                      )}
                     </div>
 
                     <p
                       style={{
-                        margin: 0,
-                        color: "#738493",
-                        fontSize: "13px",
-                        lineHeight: 1.65,
+                        margin:
+                          "10px 0 0",
+                        color:
+                          "#748592",
+                        fontSize:
+                          "13px",
+                        lineHeight:
+                          1.5,
                       }}
                     >
-                      {field.description}
+                      {
+                        field.description
+                      }
                     </p>
-
-                    <div
-                      style={{
-                        marginTop: "18px",
-                        color: "#3b9ee8",
-                        fontSize: "13px",
-                        fontWeight: "700",
-                      }}
-                    >
-                      {isSelected
-                        ? "Selected"
-                        : "Select Field"}
-                    </div>
                   </button>
                 );
               })}
             </div>
 
             {/* SELECTED FIELD */}
+
             {selectedField && (
               <div
                 style={{
-                  marginTop: "30px",
-                  background: "#ffffff",
-                  border: "1px solid #dceef8",
-                  borderRadius: "18px",
-                  padding: "22px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: "20px",
-                  flexWrap: "wrap",
+                  marginTop: "25px",
+                  padding: "20px",
+                  background: "#f7fcff",
+                  borderRadius: "15px",
+                  border:
+                    "1px solid #dceffb",
                 }}
               >
-                <div>
-                  <div
-                    style={{
-                      color: "#7a8a98",
-                      fontSize: "12px",
-                      marginBottom: "5px",
-                    }}
-                  >
-                    Selected field
-                  </div>
+                <div
+                  style={{
+                    fontSize: "13px",
+                    color: "#748592",
+                    marginBottom: "5px",
+                  }}
+                >
+                  Selected Field
+                </div>
 
-                  <div
-                    style={{
-                      color: "#183449",
-                      fontWeight: "800",
-                      fontSize: "18px",
-                    }}
-                  >
-                    {
-                      fields.find(
-                        (field) =>
-                          field.id === selectedField
-                      )?.name
-                    }
-                  </div>
+                <div
+                  style={{
+                    fontSize: "20px",
+                    fontWeight: "700",
+                    color: "#1d3444",
+                  }}
+                >
+                  {selectedFieldName}
                 </div>
 
                 <button
-                  className="primary-btn"
-                  onClick={() => {
-                    alert(
-                      "Field saved successfully. The Major selection step will be added next."
-                    );
+                  onClick={continueToMajor}
+                  style={{
+                    marginTop: "18px",
+                    border: "none",
+                    background:
+                      "#65b9f5",
+                    color: "#fff",
+                    padding:
+                      "13px 22px",
+                    borderRadius: "10px",
+                    cursor: "pointer",
+                    fontWeight: "700",
+                    fontSize: "14px",
                   }}
                 >
                   Continue to Major →
@@ -858,767 +1264,1375 @@ function App() {
               </div>
             )}
           </section>
-        </main>
 
-        {/* FOOTER */}
-        <footer
-          style={{
-            background: "#ffffff",
-            borderTop: "1px solid #e5f2fa",
-            padding: "25px 20px",
-            textAlign: "center",
-            color: "#8998a6",
-            fontSize: "13px",
-          }}
-        >
-          © 2026 MIDOYOL. All rights reserved.
-        </footer>
+          {/* MAJOR SECTION */}
+
+          {showMajorStep &&
+            selectedField && (
+              <section
+                id="major-section"
+                style={{
+                  background: "#fff",
+                  borderRadius: "22px",
+                  padding: "30px",
+                  marginBottom: "30px",
+                  boxShadow:
+                    "0 8px 30px rgba(44, 110, 150, 0.07)",
+                  scrollMarginTop:
+                    "90px",
+                }}
+              >
+                <div
+                  style={{
+                    marginBottom: "25px",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: "13px",
+                      color:
+                        "#65b9f5",
+                      fontWeight:
+                        "700",
+                      marginBottom:
+                        "8px",
+                    }}
+                  >
+                    {selectedFieldName}
+                  </div>
+
+                  <h2
+                    style={{
+                      margin:
+                        "0 0 8px",
+                      fontSize:
+                        "27px",
+                    }}
+                  >
+                    Choose Your Major
+                  </h2>
+
+                  <p
+                    style={{
+                      margin: 0,
+                      color:
+                        "#71808d",
+                    }}
+                  >
+                    Choose the major you
+                    want to study within
+                    your selected field.
+                  </p>
+                </div>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns:
+                      "repeat(auto-fit, minmax(220px, 1fr))",
+                    gap: "15px",
+                  }}
+                >
+                  {availableMajors.map(
+                    (major) => {
+                      const selected =
+                        selectedMajor ===
+                        major.id;
+
+                      return (
+                        <button
+                          key={
+                            major.id
+                          }
+                          onClick={() =>
+                            handleMajorSelect(
+                              major
+                            )
+                          }
+                          style={{
+                            textAlign:
+                              "left",
+                            background:
+                              selected
+                                ? "#eaf6ff"
+                                : "#fff",
+                            border:
+                              selected
+                                ? "2px solid #65b9f5"
+                                : "1px solid #e0eaf0",
+                            borderRadius:
+                              "15px",
+                            padding:
+                              "19px",
+                            cursor:
+                              "pointer",
+                            minHeight:
+                              "70px",
+                            display:
+                              "flex",
+                            alignItems:
+                              "center",
+                            justifyContent:
+                              "space-between",
+                            gap: "12px",
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontSize:
+                                "15px",
+                              fontWeight:
+                                selected
+                                  ? "700"
+                                  : "600",
+                              color:
+                                "#203746",
+                            }}
+                          >
+                            {
+                              major.name
+                            }
+                          </span>
+
+                          {selected && (
+                            <span
+                              style={{
+                                color:
+                                  "#65b9f5",
+                                fontWeight:
+                                  "800",
+                                fontSize:
+                                  "18px",
+                              }}
+                            >
+                              ✓
+                            </span>
+                          )}
+                        </button>
+                      );
+                    }
+                  )}
+                </div>
+
+                {/* SELECTED MAJOR */}
+
+                {selectedMajor && (
+                  <div
+                    style={{
+                      marginTop:
+                        "25px",
+                      padding:
+                        "20px",
+                      background:
+                        "#f7fcff",
+                      borderRadius:
+                        "15px",
+                      border:
+                        "1px solid #dceffb",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize:
+                          "13px",
+                        color:
+                          "#748592",
+                        marginBottom:
+                          "5px",
+                      }}
+                    >
+                      Selected Major
+                    </div>
+
+                    <div
+                      style={{
+                        fontSize:
+                          "20px",
+                        fontWeight:
+                          "700",
+                        color:
+                          "#1d3444",
+                      }}
+                    >
+                      {
+                        selectedMajorName
+                      }
+                    </div>
+
+                    <div
+                      style={{
+                        marginTop:
+                          "12px",
+                        fontSize:
+                          "13px",
+                        color:
+                          "#65b9f5",
+                        fontWeight:
+                          "600",
+                      }}
+                    >
+                      Major saved
+                      successfully.
+                    </div>
+                  </div>
+                )}
+              </section>
+            )}
+
+          {/* CURRENT SELECTION SUMMARY */}
+
+          {(selectedField ||
+            selectedMajor) && (
+            <div
+              style={{
+                background: "#ffffff",
+                borderRadius: "18px",
+                padding: "22px",
+                border:
+                  "1px solid #e5eef5",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: "13px",
+                  color: "#71808d",
+                  marginBottom: "12px",
+                  fontWeight: "700",
+                }}
+              >
+                YOUR CURRENT SELECTION
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "12px",
+                }}
+              >
+                {selectedFieldName && (
+                  <div
+                    style={{
+                      padding:
+                        "10px 15px",
+                      background:
+                        "#eaf6ff",
+                      borderRadius:
+                        "10px",
+                      color:
+                        "#24516d",
+                      fontSize:
+                        "14px",
+                    }}
+                  >
+                    Field:{" "}
+                    <strong>
+                      {
+                        selectedFieldName
+                      }
+                    </strong>
+                  </div>
+                )}
+
+                {selectedMajorName && (
+                  <div
+                    style={{
+                      padding:
+                        "10px 15px",
+                      background:
+                        "#eaf6ff",
+                      borderRadius:
+                        "10px",
+                      color:
+                        "#24516d",
+                      fontSize:
+                        "14px",
+                    }}
+                  >
+                    Major:{" "}
+                    <strong>
+                      {
+                        selectedMajorName
+                      }
+                    </strong>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </main>
       </div>
     );
   }
 
-  // ============================================================
-  // LOGGED-OUT LANDING PAGE
-  // ============================================================
+  /* =========================
+     LANDING PAGE
+  ========================= */
+
   return (
-    <div className="landing">
+    <div
+      style={{
+        minHeight: "100vh",
+        background: "#ffffff",
+        fontFamily:
+          "Arial, Helvetica, sans-serif",
+        color: "#172b3a",
+      }}
+    >
       {/* NAVBAR */}
-      <nav className="navbar">
-        <div className="navbar-inner">
-          <button
-            className="nav-logo"
-            onClick={() => goTo("home")}
+
+      <nav
+        style={{
+          position: "sticky",
+          top: 0,
+          zIndex: 100,
+          background: "#ffffff",
+          borderBottom:
+            "1px solid #eaf0f4",
+        }}
+      >
+        <div
+          style={{
+            maxWidth: "1180px",
+            margin: "auto",
+            padding: "16px 24px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent:
+              "space-between",
+          }}
+        >
+          <div
             style={{
-              background: "none",
-              border: "none",
-              cursor: "pointer",
+              fontSize: "30px",
+              fontWeight: "800",
+              color: "#65b9f5",
+              letterSpacing: "-1px",
             }}
           >
-            <div
-              style={{
-                width: "42px",
-                height: "42px",
-                borderRadius: "10px",
-                background: "#65b9f5",
-                color: "#fff",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                fontWeight: "900",
-                fontSize: "18px",
-              }}
-            >
-              M
-            </div>
-
-            <span>MIDOYOL</span>
-          </button>
-
-          <div className="nav-links">
-            <button onClick={() => goTo("home")}>
-              Home
-            </button>
-
-            <button onClick={() => goTo("universities")}>
-              Universities
-            </button>
-
-            <button onClick={() => goTo("how-it-works")}>
-              How It Works
-            </button>
-
-            <button onClick={() => goTo("about")}>
-              About Us
-            </button>
+            MIDOYOL
           </div>
 
-          <div className="nav-start">
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+            }}
+          >
             <button
-              className="outline-btn"
               onClick={openLogin}
+              style={{
+                background: "transparent",
+                border: "none",
+                padding:
+                  "10px 15px",
+                cursor: "pointer",
+                fontWeight: "600",
+                color: "#304655",
+              }}
             >
               Login
             </button>
 
             <button
-              className="primary-btn"
               onClick={openRegister}
+              style={{
+                background:
+                  "#65b9f5",
+                color: "#fff",
+                border: "none",
+                padding:
+                  "11px 18px",
+                borderRadius:
+                  "10px",
+                cursor: "pointer",
+                fontWeight: "700",
+              }}
             >
-              Register
+              Sign up
             </button>
           </div>
-
-          <button
-            className="hamburger"
-            onClick={() => setMenuOpen(!menuOpen)}
-            aria-label="Open menu"
-          >
-            ☰
-          </button>
         </div>
-
-        {menuOpen && (
-          <>
-            <div
-              className="mobile-overlay"
-              onClick={() => setMenuOpen(false)}
-            ></div>
-
-            <div className="mobile-menu">
-              <div className="mobile-menu-header">
-                <div className="mobile-menu-title">
-                  MIDOYOL
-                </div>
-
-                <button
-                  className="mobile-close"
-                  onClick={() => setMenuOpen(false)}
-                >
-                  ×
-                </button>
-              </div>
-
-              <div className="mobile-menu-items">
-                <button
-                  className="mobile-menu-item"
-                  onClick={() => goTo("home")}
-                >
-                  Home
-                </button>
-
-                <button
-                  className="mobile-menu-item"
-                  onClick={() =>
-                    goTo("universities")
-                  }
-                >
-                  Universities
-                </button>
-
-                <button
-                  className="mobile-menu-item"
-                  onClick={() =>
-                    goTo("how-it-works")
-                  }
-                >
-                  How It Works
-                </button>
-
-                <button
-                  className="mobile-menu-item"
-                  onClick={() => goTo("about")}
-                >
-                  About Us
-                </button>
-              </div>
-
-              <div className="mobile-menu-bottom">
-                <button
-                  className="outline-btn full-btn"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    openLogin();
-                  }}
-                >
-                  Login
-                </button>
-
-                <div style={{ height: "10px" }}></div>
-
-                <button
-                  className="primary-btn full-btn"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    openRegister();
-                  }}
-                >
-                  Register
-                </button>
-              </div>
-            </div>
-          </>
-        )}
       </nav>
 
       {/* HERO */}
-      <section className="hero" id="home">
-        <div className="container">
-          <div className="hero-grid">
-            <div className="hero-content">
-              <div className="hero-badge">
-                🎓 Student Admissions Platform
-              </div>
 
-              <h1>
-                Your journey to
-                <br />
-                <span>university</span> starts here.
-              </h1>
+      <section
+        style={{
+          background:
+            "linear-gradient(135deg, #eaf6ff 0%, #d9f1ff 100%)",
+          minHeight:
+            "560px",
+          display: "flex",
+          alignItems:
+            "center",
+        }}
+      >
+        <div
+          style={{
+            maxWidth: "1180px",
+            width: "100%",
+            margin: "auto",
+            padding:
+              "70px 24px",
+            textAlign: "center",
+          }}
+        >
+          <div
+            style={{
+              display:
+                "inline-block",
+              padding:
+                "8px 14px",
+              background:
+                "#ffffff",
+              borderRadius:
+                "30px",
+              color:
+                "#65b9f5",
+              fontSize:
+                "13px",
+              fontWeight:
+                "700",
+              marginBottom:
+                "20px",
+            }}
+          >
+            STUDY ABROAD MADE SIMPLE
+          </div>
 
-              <p className="hero-description">
-                MIDOYOL helps students discover universities,
-                apply easily, find scholarships, and start their
-                academic journey with confidence.
-              </p>
+          <h1
+            style={{
+              margin: 0,
+              fontSize:
+                "clamp(42px, 7vw, 72px)",
+              lineHeight: 1.05,
+              fontWeight:
+                "800",
+              color:
+                "#1b3445",
+            }}
+          >
+            Your University
+            <br />
+            Journey Starts Here
+          </h1>
 
-              <div className="hero-actions">
-                <button
-                  className="primary-btn"
-                  onClick={startApplication}
-                >
-                  Start Application →
-                </button>
+          <p
+            style={{
+              maxWidth:
+                "650px",
+              margin:
+                "25px auto",
+              color:
+                "#607583",
+              fontSize:
+                "17px",
+              lineHeight:
+                1.7,
+            }}
+          >
+            Discover universities,
+            choose your field and
+            major, and start your
+            application journey with
+            MIDOYOL.
+          </p>
 
-                <button
-                  className="secondary-btn"
-                  onClick={() =>
-                    goTo("universities")
-                  }
-                >
-                  Explore Universities
-                </button>
-              </div>
-            </div>
+          <button
+            onClick={startApplication}
+            style={{
+              background:
+                "#65b9f5",
+              color: "#fff",
+              border: "none",
+              padding:
+                "15px 30px",
+              borderRadius:
+                "12px",
+              fontSize:
+                "16px",
+              fontWeight:
+                "700",
+              cursor:
+                "pointer",
+            }}
+          >
+            Start Your Application
+          </button>
 
-            <div className="hero-visual">
-              <div className="globe">
-                <div className="globe-grid"></div>
-              </div>
-
-              <div className="flag flag-1">🇹🇷</div>
-              <div className="flag flag-2">🇸🇩</div>
-              <div className="flag flag-3">🇨🇾</div>
-              <div className="flag flag-4">🎓</div>
-            </div>
+          <div
+            style={{
+              marginTop:
+                "15px",
+              fontSize:
+                "13px",
+              color:
+                "#71808d",
+            }}
+          >
+            Application fee: $1
           </div>
         </div>
       </section>
 
       {/* HOW IT WORKS */}
-      <section
-        className="section"
-        id="how-it-works"
-      >
-        <div className="container">
-          <div className="section-title">
-            <h2>How It Works</h2>
 
-            <p>
-              A simple and easy process designed to help
-              students reach their university goals.
-            </p>
+      <section
+        style={{
+          padding:
+            "75px 24px",
+          background:
+            "#ffffff",
+        }}
+      >
+        <div
+          style={{
+            maxWidth:
+              "1100px",
+            margin:
+              "auto",
+            textAlign:
+              "center",
+          }}
+        >
+          <div
+            style={{
+              color:
+                "#65b9f5",
+              fontWeight:
+                "700",
+              fontSize:
+                "13px",
+              marginBottom:
+                "10px",
+            }}
+          >
+            HOW IT WORKS
           </div>
 
-          <div className="steps-grid">
-            <div className="step-card">
-              <div className="step-number">1</div>
+          <h2
+            style={{
+              margin:
+                "0 0 40px",
+              fontSize:
+                "34px",
+            }}
+          >
+            A Simple Journey
+          </h2>
 
-              <h3>Create Account</h3>
+          <div
+            style={{
+              display:
+                "grid",
+              gridTemplateColumns:
+                "repeat(auto-fit, minmax(200px, 1fr))",
+              gap: "20px",
+            }}
+          >
+            {[
+              [
+                "01",
+                "Choose Your Field",
+              ],
+              [
+                "02",
+                "Choose Your Major",
+              ],
+              [
+                "03",
+                "Find Your University",
+              ],
+              [
+                "04",
+                "Complete Your Application",
+              ],
+            ].map(
+              ([number, title]) => (
+                <div
+                  key={number}
+                  style={{
+                    padding:
+                      "25px",
+                    background:
+                      "#f7fcff",
+                    borderRadius:
+                      "16px",
+                    textAlign:
+                      "left",
+                  }}
+                >
+                  <div
+                    style={{
+                      color:
+                        "#65b9f5",
+                      fontWeight:
+                        "800",
+                      marginBottom:
+                        "12px",
+                    }}
+                  >
+                    {number}
+                  </div>
 
-              <p>
-                Create your MIDOYOL account and start your
-                application journey.
-              </p>
-            </div>
-
-            <div className="step-card">
-              <div className="step-number">2</div>
-
-              <h3>Choose University</h3>
-
-              <p>
-                Explore universities and select the program
-                that fits you.
-              </p>
-            </div>
-
-            <div className="step-card">
-              <div className="step-number">3</div>
-
-              <h3>Submit Documents</h3>
-
-              <p>
-                Upload your documents and complete your
-                application online.
-              </p>
-            </div>
-
-            <div className="step-card">
-              <div className="step-number">4</div>
-
-              <h3>Track Application</h3>
-
-              <p>
-                Follow every stage of your application
-                directly from your dashboard.
-              </p>
-            </div>
+                  <div
+                    style={{
+                      fontWeight:
+                        "700",
+                      fontSize:
+                        "17px",
+                    }}
+                  >
+                    {title}
+                  </div>
+                </div>
+              )
+            )}
           </div>
         </div>
       </section>
 
       {/* UNIVERSITIES */}
-      <section
-        className="section"
-        id="universities"
-      >
-        <div className="container">
-          <div className="section-title">
-            <h2>Find Your University</h2>
 
-            <p>
-              Discover leading universities and find the right
-              academic path for your future.
-            </p>
+      <section
+        id="universities"
+        style={{
+          padding:
+            "70px 24px",
+          background:
+            "#f7fcff",
+        }}
+      >
+        <div
+          style={{
+            maxWidth:
+              "1100px",
+            margin:
+              "auto",
+            textAlign:
+              "center",
+          }}
+        >
+          <div
+            style={{
+              color:
+                "#65b9f5",
+              fontWeight:
+                "700",
+              fontSize:
+                "13px",
+              marginBottom:
+                "10px",
+            }}
+          >
+            UNIVERSITIES
           </div>
 
-          <div className="university-grid">
-            <div className="university-card">
-              <div className="university-image">
-                İG
-              </div>
+          <h2
+            style={{
+              margin:
+                "0 0 35px",
+              fontSize:
+                "34px",
+            }}
+          >
+            Find Your University
+          </h2>
 
-              <div className="university-body">
-                <h3>
-                  Istanbul Gelisim University
-                </h3>
-
-                <p>
-                  Explore programs, admission requirements,
-                  and available opportunities.
-                </p>
-
-                <button
-                  className="outline-btn"
-                  onClick={() =>
-                    alert(
-                      "Istanbul Gelisim University demo will open here."
-                    )
-                  }
+          <div
+            style={{
+              display:
+                "grid",
+              gridTemplateColumns:
+                "repeat(auto-fit, minmax(220px, 1fr))",
+              gap: "18px",
+            }}
+          >
+            {[
+              "Istanbul Aydın University",
+              "Istanbul Gelişim University",
+              "İstinye University",
+            ].map(
+              (university) => (
+                <div
+                  key={university}
+                  style={{
+                    background:
+                      "#ffffff",
+                    borderRadius:
+                      "16px",
+                    padding:
+                      "28px 20px",
+                    border:
+                      "1px solid #e5eef5",
+                  }}
                 >
-                  View University
-                </button>
-              </div>
-            </div>
+                  <h3
+                    style={{
+                      margin: 0,
+                      fontSize:
+                        "18px",
+                    }}
+                  >
+                    {university}
+                  </h3>
 
-            <div className="university-card">
-              <div className="university-image">
-                İA
-              </div>
-
-              <div className="university-body">
-                <h3>
-                  Istanbul Aydin University
-                </h3>
-
-                <p>
-                  Discover undergraduate programs and start
-                  your application.
-                </p>
-
-                <button
-                  className="outline-btn"
-                  onClick={() =>
-                    alert(
-                      "Istanbul Aydin University demo will open here."
-                    )
-                  }
-                >
-                  View University
-                </button>
-              </div>
-            </div>
-
-            <div className="university-card">
-              <div className="university-image">
-                İÜ
-              </div>
-
-              <div className="university-body">
-                <h3>
-                  Explore More Universities
-                </h3>
-
-                <p>
-                  Browse more universities and find the
-                  program that matches your goals.
-                </p>
-
-                <button
-                  className="primary-btn"
-                  onClick={() =>
-                    alert(
-                      "More universities will be added to the MIDOYOL demo."
-                    )
-                  }
-                >
-                  Explore All
-                </button>
-              </div>
-            </div>
+                  <p
+                    style={{
+                      color:
+                        "#71808d",
+                      fontSize:
+                        "13px",
+                      marginTop:
+                        "10px",
+                    }}
+                  >
+                    Explore available
+                    programs through
+                    MIDOYOL.
+                  </p>
+                </div>
+              )
+            )}
           </div>
         </div>
       </section>
 
       {/* ABOUT */}
-      <section className="section" id="about">
-        <div className="container">
-          <div className="section-title">
-            <h2>About MIDOYOL</h2>
 
-            <p>
-              MIDOYOL is designed to make the university admission
-              journey simpler, clearer, and easier for students.
-            </p>
+      <section
+        id="about"
+        style={{
+          padding:
+            "75px 24px",
+          background:
+            "#ffffff",
+        }}
+      >
+        <div
+          style={{
+            maxWidth:
+              "800px",
+            margin:
+              "auto",
+            textAlign:
+              "center",
+          }}
+        >
+          <div
+            style={{
+              color:
+                "#65b9f5",
+              fontWeight:
+                "700",
+              fontSize:
+                "13px",
+              marginBottom:
+                "10px",
+            }}
+          >
+            ABOUT MIDOYOL
           </div>
+
+          <h2
+            style={{
+              margin:
+                "0 0 18px",
+              fontSize:
+                "34px",
+            }}
+          >
+            Built for Students
+          </h2>
+
+          <p
+            style={{
+              color:
+                "#71808d",
+              lineHeight:
+                1.8,
+              margin: 0,
+            }}
+          >
+            MIDOYOL is designed to make the
+            university journey easier by
+            bringing university discovery,
+            applications and student services
+            together in one place.
+          </p>
         </div>
       </section>
 
       {/* CTA */}
-      <section className="cta-section">
-        <div className="container">
-          <div className="cta-box">
-            <h2>Ready to start your journey?</h2>
 
-            <p>
-              Take the first step toward your university future
-              with MIDOYOL.
-            </p>
+      <section
+        style={{
+          padding:
+            "70px 24px",
+          background:
+            "#eaf6ff",
+          textAlign:
+            "center",
+        }}
+      >
+        <h2
+          style={{
+            margin:
+              "0 0 15px",
+            fontSize:
+              "34px",
+          }}
+        >
+          Ready to Start?
+        </h2>
 
-            <button
-              className="primary-btn"
-              onClick={startApplication}
-            >
-              Start Your Application →
-            </button>
-          </div>
-        </div>
+        <p
+          style={{
+            color:
+              "#71808d",
+            margin:
+              "0 0 25px",
+          }}
+        >
+          Create your account and begin
+          your university journey.
+        </p>
+
+        <button
+          onClick={openRegister}
+          style={{
+            background:
+              "#65b9f5",
+            color: "#fff",
+            border: "none",
+            padding:
+              "14px 28px",
+            borderRadius:
+              "11px",
+            cursor:
+              "pointer",
+            fontWeight:
+              "700",
+          }}
+        >
+          Create Account
+        </button>
       </section>
 
       {/* FOOTER */}
-      <footer className="footer">
-        <div className="container">
-          <div className="footer-grid">
-            <div>
-              <div className="footer-logo">
-                <div
-                  style={{
-                    width: "42px",
-                    height: "42px",
-                    borderRadius: "9px",
-                    background: "#65b9f5",
-                    color: "#fff",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontWeight: "900",
-                  }}
-                >
-                  M
-                </div>
 
-                <span>MIDOYOL</span>
-              </div>
-
-              <p>
-                Your journey to university starts here. We make
-                student admissions simpler, clearer, and easier.
-              </p>
-            </div>
-
-            <div>
-              <h4>Platform</h4>
-
-              <div className="footer-links">
-                <button
-                  onClick={() =>
-                    goTo("universities")
-                  }
-                >
-                  Universities
-                </button>
-
-                <button
-                  onClick={() =>
-                    goTo("how-it-works")
-                  }
-                >
-                  How It Works
-                </button>
-
-                <button onClick={startApplication}>
-                  Start Application
-                </button>
-              </div>
-            </div>
-
-            <div>
-              <h4>Support</h4>
-
-              <div className="footer-links">
-                <button
-                  onClick={() =>
-                    alert(
-                      "MIDOYOL Support will be available here."
-                    )
-                  }
-                >
-                  Contact Us
-                </button>
-
-                <button
-                  onClick={() =>
-                    alert(
-                      "MIDOYOL Help Center will be available here."
-                    )
-                  }
-                >
-                  Help Center
-                </button>
-
-                <button
-                  onClick={() =>
-                    alert(
-                      "MIDOYOL Student Support will be available here."
-                    )
-                  }
-                >
-                  Student Support
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div className="footer-bottom">
-            © 2026 MIDOYOL. All rights reserved.
-          </div>
-        </div>
+      <footer
+        style={{
+          background:
+            "#ffffff",
+          borderTop:
+            "1px solid #e9f0f4",
+          padding:
+            "25px 24px",
+          textAlign:
+            "center",
+          color:
+            "#8a9aa7",
+          fontSize:
+            "13px",
+        }}
+      >
+        © {new Date().getFullYear()} MIDOYOL. All
+        rights reserved.
       </footer>
 
       {/* AUTH MODAL */}
+
       {authModalOpen && (
         <div
-          className="modal-overlay"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              closeAuth();
-            }
+          style={{
+            position:
+              "fixed",
+            inset: 0,
+            background:
+              "rgba(17, 37, 51, 0.45)",
+            zIndex: 1000,
+            display:
+              "flex",
+            alignItems:
+              "center",
+            justifyContent:
+              "center",
+            padding:
+              "20px",
           }}
+          onClick={closeAuth}
         >
-          <div className="auth-modal">
+          <div
+            style={{
+              width:
+                "100%",
+              maxWidth:
+                "430px",
+              background:
+                "#ffffff",
+              borderRadius:
+                "20px",
+              padding:
+                "30px",
+              position:
+                "relative",
+              boxShadow:
+                "0 20px 60px rgba(0,0,0,0.15)",
+            }}
+            onClick={(e) =>
+              e.stopPropagation()
+            }
+          >
             <button
-              className="modal-close"
               onClick={closeAuth}
-              aria-label="Close"
+              style={{
+                position:
+                  "absolute",
+                top: "15px",
+                right: "15px",
+                border:
+                  "none",
+                background:
+                  "transparent",
+                fontSize:
+                  "24px",
+                cursor:
+                  "pointer",
+                color:
+                  "#71808d",
+              }}
             >
               ×
             </button>
 
-            <h2 className="modal-title">
-              {authMode === "login"
+            <h2
+              style={{
+                margin:
+                  "0 0 8px",
+                fontSize:
+                  "28px",
+              }}
+            >
+              {authMode ===
+              "login"
                 ? "Welcome Back"
                 : "Create Your Account"}
             </h2>
 
-            <p className="modal-subtitle">
-              {authMode === "login"
+            <p
+              style={{
+                color:
+                  "#71808d",
+                margin:
+                  "0 0 25px",
+                fontSize:
+                  "14px",
+              }}
+            >
+              {authMode ===
+              "login"
                 ? "Login to continue your MIDOYOL journey."
-                : "Create your student account and start your journey."}
+                : "Create your MIDOYOL account to start your application."}
             </p>
 
-            <div className="auth-tabs">
+            {/* TABS */}
+
+            <div
+              style={{
+                display:
+                  "flex",
+                background:
+                  "#f2f7fa",
+                borderRadius:
+                  "10px",
+                padding:
+                  "4px",
+                marginBottom:
+                  "22px",
+              }}
+            >
               <button
-                className={`auth-tab ${
-                  authMode === "login"
-                    ? "active"
-                    : ""
-                }`}
                 onClick={() => {
-                  setAuthMode("login");
+                  setAuthMode(
+                    "login"
+                  );
                   setAuthError("");
                   setAuthSuccess("");
+                }}
+                style={{
+                  flex: 1,
+                  border:
+                    "none",
+                  padding:
+                    "10px",
+                  borderRadius:
+                    "8px",
+                  cursor:
+                    "pointer",
+                  background:
+                    authMode ===
+                    "login"
+                      ? "#ffffff"
+                      : "transparent",
+                  fontWeight:
+                    authMode ===
+                    "login"
+                      ? "700"
+                      : "500",
                 }}
               >
                 Login
               </button>
 
               <button
-                className={`auth-tab ${
-                  authMode === "register"
-                    ? "active"
-                    : ""
-                }`}
                 onClick={() => {
-                  setAuthMode("register");
+                  setAuthMode(
+                    "register"
+                  );
                   setAuthError("");
                   setAuthSuccess("");
                 }}
+                style={{
+                  flex: 1,
+                  border:
+                    "none",
+                  padding:
+                    "10px",
+                  borderRadius:
+                    "8px",
+                  cursor:
+                    "pointer",
+                  background:
+                    authMode ===
+                    "register"
+                      ? "#ffffff"
+                      : "transparent",
+                  fontWeight:
+                    authMode ===
+                    "register"
+                      ? "700"
+                      : "500",
+                }}
               >
-                Register
+                Sign up
               </button>
             </div>
 
-            {authError && (
-              <div className="form-error">
-                {authError}
-              </div>
-            )}
-
-            {authSuccess && (
-              <div className="form-success">
-                {authSuccess}
-              </div>
-            )}
-
-            <form onSubmit={handleAuth}>
-              {authMode === "register" && (
-                <div className="form-group">
-                  <label className="form-label">
-                    Full Name
+            <form
+              onSubmit={handleAuth}
+            >
+              {authMode ===
+                "register" && (
+                <div
+                  style={{
+                    marginBottom:
+                      "15px",
+                  }}
+                >
+                  <label
+                    style={{
+                      display:
+                        "block",
+                      marginBottom:
+                        "7px",
+                      fontSize:
+                        "13px",
+                      fontWeight:
+                        "700",
+                    }}
+                  >
+                    Name
                   </label>
 
                   <input
-                    className="form-input"
                     type="text"
-                    placeholder="Enter your full name"
                     value={name}
                     onChange={(e) =>
-                      setName(e.target.value)
+                      setName(
+                        e.target
+                          .value
+                      )
                     }
-                    autoComplete="name"
+                    placeholder="Your name"
+                    style={{
+                      width:
+                        "100%",
+                      boxSizing:
+                        "border-box",
+                      padding:
+                        "13px",
+                      border:
+                        "1px solid #dce7ed",
+                      borderRadius:
+                        "10px",
+                      outline:
+                        "none",
+                    }}
                   />
                 </div>
               )}
 
-              <div className="form-group">
-                <label className="form-label">
-                  Email Address
+              <div
+                style={{
+                  marginBottom:
+                    "15px",
+                }}
+              >
+                <label
+                  style={{
+                    display:
+                      "block",
+                    marginBottom:
+                      "7px",
+                    fontSize:
+                      "13px",
+                    fontWeight:
+                      "700",
+                  }}
+                >
+                  Email
                 </label>
 
                 <input
-                  className="form-input"
                   type="email"
-                  placeholder="student@example.com"
                   value={email}
                   onChange={(e) =>
-                    setEmail(e.target.value)
+                    setEmail(
+                      e.target
+                        .value
+                    )
                   }
-                  autoComplete="email"
+                  placeholder="you@example.com"
+                  style={{
+                    width:
+                      "100%",
+                    boxSizing:
+                      "border-box",
+                    padding:
+                      "13px",
+                    border:
+                      "1px solid #dce7ed",
+                    borderRadius:
+                      "10px",
+                    outline:
+                      "none",
+                  }}
                 />
               </div>
 
-              <div className="form-group">
-                <label className="form-label">
+              <div
+                style={{
+                  marginBottom:
+                    "15px",
+                }}
+              >
+                <label
+                  style={{
+                    display:
+                      "block",
+                    marginBottom:
+                      "7px",
+                    fontSize:
+                      "13px",
+                    fontWeight:
+                      "700",
+                  }}
+                >
                   Password
                 </label>
 
                 <input
-                  className="form-input"
                   type="password"
-                  placeholder="Enter your password"
                   value={password}
                   onChange={(e) =>
-                    setPassword(e.target.value)
+                    setPassword(
+                      e.target
+                        .value
+                    )
                   }
-                  autoComplete={
-                    authMode === "login"
-                      ? "current-password"
-                      : "new-password"
-                  }
+                  placeholder="Password"
+                  style={{
+                    width:
+                      "100%",
+                    boxSizing:
+                      "border-box",
+                    padding:
+                      "13px",
+                    border:
+                      "1px solid #dce7ed",
+                    borderRadius:
+                      "10px",
+                    outline:
+                      "none",
+                  }}
                 />
               </div>
 
-              {authMode === "register" && (
-                <div className="form-group">
-                  <label className="form-label">
+              {authMode ===
+                "register" && (
+                <div
+                  style={{
+                    marginBottom:
+                      "15px",
+                  }}
+                >
+                  <label
+                    style={{
+                      display:
+                        "block",
+                      marginBottom:
+                        "7px",
+                      fontSize:
+                        "13px",
+                      fontWeight:
+                        "700",
+                    }}
+                  >
                     Confirm Password
                   </label>
 
                   <input
-                    className="form-input"
                     type="password"
-                    placeholder="Confirm your password"
-                    value={confirmPassword}
+                    value={
+                      confirmPassword
+                    }
                     onChange={(e) =>
                       setConfirmPassword(
-                        e.target.value
+                        e.target
+                          .value
                       )
                     }
-                    autoComplete="new-password"
+                    placeholder="Confirm password"
+                    style={{
+                      width:
+                        "100%",
+                      boxSizing:
+                        "border-box",
+                      padding:
+                        "13px",
+                      border:
+                        "1px solid #dce7ed",
+                      borderRadius:
+                        "10px",
+                      outline:
+                        "none",
+                    }}
                   />
                 </div>
               )}
 
+              {authError && (
+                <div
+                  style={{
+                    background:
+                      "#fff1f1",
+                    color:
+                      "#c0392b",
+                    padding:
+                      "11px 13px",
+                    borderRadius:
+                      "9px",
+                    fontSize:
+                      "13px",
+                    marginBottom:
+                      "14px",
+                  }}
+                >
+                  {authError}
+                </div>
+              )}
+
+              {authSuccess && (
+                <div
+                  style={{
+                    background:
+                      "#eefaf3",
+                    color:
+                      "#23844b",
+                    padding:
+                      "11px 13px",
+                    borderRadius:
+                      "9px",
+                    fontSize:
+                      "13px",
+                    marginBottom:
+                      "14px",
+                  }}
+                >
+                  {authSuccess}
+                </div>
+              )}
+
               <button
-                className="primary-btn full-btn"
                 type="submit"
-                disabled={authSubmitting}
+                disabled={
+                  authSubmitting
+                }
                 style={{
-                  opacity: authSubmitting ? 0.7 : 1,
+                  width:
+                    "100%",
+                  border:
+                    "none",
+                  background:
+                    "#65b9f5",
+                  color:
+                    "#ffffff",
+                  padding:
+                    "14px",
+                  borderRadius:
+                    "10px",
+                  cursor:
+                    authSubmitting
+                      ? "not-allowed"
+                      : "pointer",
+                  fontWeight:
+                    "700",
+                  opacity:
+                    authSubmitting
+                      ? 0.7
+                      : 1,
                 }}
               >
                 {authSubmitting
                   ? "Please wait..."
-                  : authMode === "login"
+                  : authMode ===
+                    "login"
                   ? "Login"
                   : "Create Account"}
               </button>
             </form>
 
-            {authMode === "login" && (
-              <div
+            {authMode ===
+              "login" && (
+              <button
+                onClick={
+                  handleForgotPassword
+                }
                 style={{
-                  textAlign: "center",
-                  marginTop: "15px",
+                  marginTop:
+                    "16px",
+                  width:
+                    "100%",
+                  border:
+                    "none",
+                  background:
+                    "transparent",
+                  color:
+                    "#65b9f5",
+                  cursor:
+                    "pointer",
+                  fontSize:
+                    "13px",
+                  fontWeight:
+                    "600",
                 }}
               >
-                <button
-                  className="text-btn"
-                  onClick={handleForgotPassword}
-                >
-                  Forgot password?
-                </button>
-              </div>
+                Forgot password?
+              </button>
             )}
-
-            <div
-              style={{
-                textAlign: "center",
-                marginTop: "22px",
-                color: "var(--muted)",
-                fontSize: "13px",
-              }}
-            >
-              {authMode === "login" ? (
-                <>
-                  Don't have an account?{" "}
-                  <button
-                    className="text-btn"
-                    onClick={() => {
-                      setAuthMode("register");
-                      setAuthError("");
-                      setAuthSuccess("");
-                    }}
-                  >
-                    Register
-                  </button>
-                </>
-              ) : (
-                <>
-                  Already have an account?{" "}
-                  <button
-                    className="text-btn"
-                    onClick={() => {
-                      setAuthMode("login");
-                      setAuthError("");
-                      setAuthSuccess("");
-                    }}
-                  >
-                    Login
-                  </button>
-                </>
-              )}
-            </div>
           </div>
         </div>
       )}
