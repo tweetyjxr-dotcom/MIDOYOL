@@ -18,13 +18,13 @@ import { auth, db } from "./firebase";
 
 function App() {
   /* =========================
-     GENERAL
+  GENERAL
   ========================= */
 
   const [menuOpen, setMenuOpen] = useState(false);
 
   /* =========================
-     AUTH
+  AUTH
   ========================= */
 
   const [user, setUser] = useState(null);
@@ -43,7 +43,7 @@ function App() {
   const [authSubmitting, setAuthSubmitting] = useState(false);
 
   /* =========================
-     APPLICATION
+  APPLICATION
   ========================= */
 
   const [applicationLoading, setApplicationLoading] = useState(false);
@@ -54,11 +54,15 @@ function App() {
   const [selectedMajor, setSelectedMajor] = useState("");
   const [selectedMajorName, setSelectedMajorName] = useState("");
 
+  const [selectedBudget, setSelectedBudget] = useState("");
+  const [selectedBudgetName, setSelectedBudgetName] = useState("");
+
   const [applicationStep, setApplicationStep] = useState("field");
   const [showMajorStep, setShowMajorStep] = useState(false);
+  const [showBudgetStep, setShowBudgetStep] = useState(false);
 
   /* =========================
-     FIELDS
+  FIELDS
   ========================= */
 
   const fields = [
@@ -125,7 +129,7 @@ function App() {
   ];
 
   /* =========================
-     MAJORS
+  MAJORS
   ========================= */
 
   const majorsByField = {
@@ -405,32 +409,65 @@ function App() {
   };
 
   /* =========================
-     AUTH STATE
+  BUDGETS
+  ========================= */
+
+  const budgets = [
+    {
+      id: "under-3000",
+      name: "Under $3,000",
+    },
+    {
+      id: "3000-5000",
+      name: "$3,000 – $5,000",
+    },
+    {
+      id: "5000-8000",
+      name: "$5,000 – $8,000",
+    },
+    {
+      id: "8000-12000",
+      name: "$8,000 – $12,000",
+    },
+    {
+      id: "above-12000",
+      name: "Above $12,000",
+    },
+  ];
+
+  /* =========================
+  AUTH STATE
   ========================= */
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
+    const unsubscribe = onAuthStateChanged(
+      auth,
+      async (currentUser) => {
+        setUser(currentUser);
 
-      if (currentUser) {
-        await loadApplication(currentUser.uid);
-      } else {
-        setSelectedField("");
-        setSelectedFieldName("");
-        setSelectedMajor("");
-        setSelectedMajorName("");
-        setApplicationStep("field");
-        setShowMajorStep(false);
+        if (currentUser) {
+          await loadApplication(currentUser.uid);
+        } else {
+          setSelectedField("");
+          setSelectedFieldName("");
+          setSelectedMajor("");
+          setSelectedMajorName("");
+          setSelectedBudget("");
+          setSelectedBudgetName("");
+          setApplicationStep("field");
+          setShowMajorStep(false);
+          setShowBudgetStep(false);
+        }
+
+        setAuthLoading(false);
       }
-
-      setAuthLoading(false);
-    });
+    );
 
     return () => unsubscribe();
   }, []);
 
   /* =========================
-     LOAD APPLICATION
+  LOAD APPLICATION
   ========================= */
 
   const loadApplication = async (uid) => {
@@ -457,23 +494,40 @@ function App() {
           );
         }
 
+        if (data.selectedBudget) {
+          setSelectedBudget(data.selectedBudget);
+          setSelectedBudgetName(
+            data.selectedBudgetName || ""
+          );
+        }
+
         if (data.applicationStep) {
           setApplicationStep(data.applicationStep);
 
-          if (data.applicationStep === "major") {
+          if (
+            data.applicationStep === "major" ||
+            data.applicationStep === "budget"
+          ) {
             setShowMajorStep(true);
+          }
+
+          if (data.applicationStep === "budget") {
+            setShowBudgetStep(true);
           }
         }
       }
     } catch (error) {
-      console.error("Error loading application:", error);
+      console.error(
+        "Error loading application:",
+        error
+      );
     } finally {
       setApplicationLoading(false);
     }
   };
 
   /* =========================
-     NAVIGATION
+  NAVIGATION
   ========================= */
 
   const goTo = (id) => {
@@ -490,7 +544,7 @@ function App() {
   };
 
   /* =========================
-     AUTH MODAL
+  AUTH MODAL
   ========================= */
 
   const openLogin = () => {
@@ -516,7 +570,7 @@ function App() {
   };
 
   /* =========================
-     AUTH
+  AUTH
   ========================= */
 
   const handleAuth = async (e) => {
@@ -526,7 +580,9 @@ function App() {
     setAuthSuccess("");
 
     if (!email || !password) {
-      setAuthError("Please enter your email and password.");
+      setAuthError(
+        "Please enter your email and password."
+      );
       return;
     }
 
@@ -544,7 +600,9 @@ function App() {
       }
 
       if (password !== confirmPassword) {
-        setAuthError("Passwords do not match.");
+        setAuthError(
+          "Passwords do not match."
+        );
         return;
       }
     }
@@ -570,7 +628,8 @@ function App() {
             uid: result.user.uid,
             name: name.trim(),
             email: email,
-            createdAt: new Date().toISOString(),
+            createdAt:
+              new Date().toISOString(),
             applicationStep: "field",
           },
           { merge: true }
@@ -590,7 +649,9 @@ function App() {
           password
         );
 
-        setAuthSuccess("Login successful.");
+        setAuthSuccess(
+          "Login successful."
+        );
 
         setTimeout(() => {
           setAuthModalOpen(false);
@@ -599,27 +660,38 @@ function App() {
     } catch (error) {
       console.error(error);
 
-      if (error.code === "auth/email-already-in-use") {
+      if (
+        error.code ===
+        "auth/email-already-in-use"
+      ) {
         setAuthError(
           "This email is already registered."
         );
-      } else if (error.code === "auth/invalid-email") {
-        setAuthError("Please enter a valid email.");
       } else if (
-        error.code === "auth/invalid-credential"
+        error.code ===
+        "auth/invalid-email"
+      ) {
+        setAuthError(
+          "Please enter a valid email."
+        );
+      } else if (
+        error.code ===
+        "auth/invalid-credential"
       ) {
         setAuthError(
           "Incorrect email or password."
         );
       } else if (
-        error.code === "auth/weak-password"
+        error.code ===
+        "auth/weak-password"
       ) {
         setAuthError(
           "Password must be at least 6 characters."
         );
       } else {
         setAuthError(
-          error.message || "Something went wrong."
+          error.message ||
+            "Something went wrong."
         );
       }
     } finally {
@@ -628,7 +700,7 @@ function App() {
   };
 
   /* =========================
-     FORGOT PASSWORD
+  FORGOT PASSWORD
   ========================= */
 
   const handleForgotPassword = async () => {
@@ -662,7 +734,7 @@ function App() {
   };
 
   /* =========================
-     LOGOUT
+  LOGOUT
   ========================= */
 
   const handleLogout = async () => {
@@ -673,15 +745,18 @@ function App() {
       setSelectedFieldName("");
       setSelectedMajor("");
       setSelectedMajorName("");
+      setSelectedBudget("");
+      setSelectedBudgetName("");
       setApplicationStep("field");
       setShowMajorStep(false);
+      setShowBudgetStep(false);
     } catch (error) {
       console.error(error);
     }
   };
 
   /* =========================
-     START APPLICATION
+  START APPLICATION
   ========================= */
 
   const startApplication = () => {
@@ -692,6 +767,7 @@ function App() {
 
     setApplicationStep("field");
     setShowMajorStep(false);
+    setShowBudgetStep(false);
 
     window.scrollTo({
       top: 0,
@@ -700,7 +776,7 @@ function App() {
   };
 
   /* =========================
-     SELECT FIELD
+  SELECT FIELD
   ========================= */
 
   const handleFieldSelect = async (field) => {
@@ -711,12 +787,15 @@ function App() {
       setSelectedFieldName(field.name);
 
       /*
-        When changing the field, the old major
-        must not remain selected.
+        When changing the field,
+        old major and budget must
+        not remain selected.
       */
 
       setSelectedMajor("");
       setSelectedMajorName("");
+      setSelectedBudget("");
+      setSelectedBudgetName("");
 
       await setDoc(
         doc(db, "users", user.uid),
@@ -725,13 +804,17 @@ function App() {
           selectedFieldName: field.name,
           selectedMajor: "",
           selectedMajorName: "",
+          selectedBudget: "",
+          selectedBudgetName: "",
           applicationStep: "field",
-          updatedAt: new Date().toISOString(),
+          updatedAt:
+            new Date().toISOString(),
         },
         { merge: true }
       );
 
       setApplicationStep("field");
+      setShowBudgetStep(false);
     } catch (error) {
       console.error(
         "Error saving field:",
@@ -745,12 +828,14 @@ function App() {
   };
 
   /* =========================
-     CONTINUE TO MAJOR
+  CONTINUE TO MAJOR
   ========================= */
 
   const continueToMajor = () => {
     if (!selectedField) {
-      alert("Please select a field first.");
+      alert(
+        "Please select a field first."
+      );
       return;
     }
 
@@ -758,7 +843,9 @@ function App() {
 
     setTimeout(() => {
       const element =
-        document.getElementById("major-section");
+        document.getElementById(
+          "major-section"
+        );
 
       if (element) {
         element.scrollIntoView({
@@ -770,7 +857,7 @@ function App() {
   };
 
   /* =========================
-     SELECT MAJOR
+  SELECT MAJOR
   ========================= */
 
   const handleMajorSelect = async (major) => {
@@ -780,6 +867,15 @@ function App() {
       setSelectedMajor(major.id);
       setSelectedMajorName(major.name);
 
+      /*
+        Changing the major resets
+        anything after major.
+      */
+
+      setSelectedBudget("");
+      setSelectedBudgetName("");
+      setShowBudgetStep(false);
+
       await setDoc(
         doc(db, "users", user.uid),
         {
@@ -787,8 +883,11 @@ function App() {
           selectedFieldName,
           selectedMajor: major.id,
           selectedMajorName: major.name,
+          selectedBudget: "",
+          selectedBudgetName: "",
           applicationStep: "major",
-          updatedAt: new Date().toISOString(),
+          updatedAt:
+            new Date().toISOString(),
         },
         { merge: true }
       );
@@ -807,7 +906,102 @@ function App() {
   };
 
   /* =========================
-     LOADING
+  CONTINUE TO BUDGET
+  ========================= */
+
+  const continueToBudget = async () => {
+    if (!selectedMajor) {
+      alert(
+        "Please select a major first."
+      );
+      return;
+    }
+
+    try {
+      setShowBudgetStep(true);
+      setApplicationStep("budget");
+
+      await setDoc(
+        doc(db, "users", user.uid),
+        {
+          selectedField,
+          selectedFieldName,
+          selectedMajor,
+          selectedMajorName,
+          applicationStep: "budget",
+          updatedAt:
+            new Date().toISOString(),
+        },
+        { merge: true }
+      );
+
+      setTimeout(() => {
+        const element =
+          document.getElementById(
+            "budget-section"
+          );
+
+        if (element) {
+          element.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          });
+        }
+      }, 100);
+    } catch (error) {
+      console.error(
+        "Error moving to budget:",
+        error
+      );
+
+      alert(
+        "We couldn't continue to budget. Please try again."
+      );
+    }
+  };
+
+  /* =========================
+  SELECT BUDGET
+  ========================= */
+
+  const handleBudgetSelect = async (budget) => {
+    if (!user || !selectedMajor) return;
+
+    try {
+      setSelectedBudget(budget.id);
+      setSelectedBudgetName(budget.name);
+
+      await setDoc(
+        doc(db, "users", user.uid),
+        {
+          selectedField,
+          selectedFieldName,
+          selectedMajor,
+          selectedMajorName,
+          selectedBudget: budget.id,
+          selectedBudgetName: budget.name,
+          applicationStep: "budget",
+          updatedAt:
+            new Date().toISOString(),
+        },
+        { merge: true }
+      );
+
+      setApplicationStep("budget");
+    } catch (error) {
+      console.error(
+        "Error saving budget:",
+        error
+      );
+
+      alert(
+        "We couldn't save your budget. Please try again."
+      );
+    }
+  };
+
+  /* =========================
+  LOADING
   ========================= */
 
   if (authLoading) {
@@ -819,7 +1013,8 @@ function App() {
           alignItems: "center",
           justifyContent: "center",
           background: "#eaf6ff",
-          fontFamily: "Arial, sans-serif",
+          fontFamily:
+            "Arial, sans-serif",
           color: "#1c3144",
         }}
       >
@@ -839,7 +1034,7 @@ function App() {
   }
 
   /* =========================
-     LOGGED-IN APPLICATION
+  LOGGED-IN APPLICATION
   ========================= */
 
   if (user) {
@@ -874,7 +1069,8 @@ function App() {
               maxWidth: "1180px",
               margin: "auto",
               display: "flex",
-              justifyContent: "space-between",
+              justifyContent:
+                "space-between",
               alignItems: "center",
               gap: "15px",
             }}
@@ -913,7 +1109,8 @@ function App() {
           style={{
             maxWidth: "1180px",
             margin: "auto",
-            padding: "45px 20px 80px",
+            padding:
+              "45px 20px 80px",
           }}
         >
           {/* HEADER */}
@@ -952,8 +1149,9 @@ function App() {
                 fontSize: "16px",
               }}
             >
-              Choose your field and major to
-              continue your application.
+              Choose your field, major
+              and budget to continue
+              your application.
             </p>
           </div>
 
@@ -989,7 +1187,8 @@ function App() {
                 "Payment",
                 "Tracking",
               ].map((step, index) => {
-                const stepNumber = index + 1;
+                const stepNumber =
+                  index + 1;
 
                 let active = false;
                 let completed = false;
@@ -1004,17 +1203,34 @@ function App() {
                     !!selectedField &&
                     (showMajorStep ||
                       applicationStep ===
-                        "major");
+                        "major" ||
+                      applicationStep ===
+                        "budget");
                 }
 
                 if (step === "Major") {
                   active =
-                    showMajorStep ||
-                    applicationStep ===
-                      "major";
+                    (showMajorStep ||
+                      applicationStep ===
+                        "major") &&
+                    applicationStep !==
+                      "budget";
 
                   completed =
-                    !!selectedMajor;
+                    !!selectedMajor &&
+                    (showBudgetStep ||
+                      applicationStep ===
+                        "budget");
+                }
+
+                if (step === "Budget") {
+                  active =
+                    showBudgetStep ||
+                    applicationStep ===
+                      "budget";
+
+                  completed =
+                    !!selectedBudget;
                 }
 
                 return (
@@ -1022,7 +1238,8 @@ function App() {
                     key={step}
                     style={{
                       display: "flex",
-                      alignItems: "center",
+                      alignItems:
+                        "center",
                       gap: "8px",
                       flex: 1,
                     }}
@@ -1032,9 +1249,11 @@ function App() {
                         width: "30px",
                         height: "30px",
                         minWidth: "30px",
-                        borderRadius: "50%",
+                        borderRadius:
+                          "50%",
                         display: "flex",
-                        alignItems: "center",
+                        alignItems:
+                          "center",
                         justifyContent:
                           "center",
                         background:
@@ -1114,8 +1333,8 @@ function App() {
                   color: "#71808d",
                 }}
               >
-                Select the academic field you
-                want to study.
+                Select the academic field
+                you want to study.
               </p>
             </div>
 
@@ -1129,7 +1348,8 @@ function App() {
             >
               {fields.map((field) => {
                 const selected =
-                  selectedField === field.id;
+                  selectedField ===
+                  field.id;
 
                 return (
                   <button
@@ -1141,22 +1361,27 @@ function App() {
                     }
                     style={{
                       textAlign: "left",
-                      background: selected
-                        ? "#eaf6ff"
-                        : "#ffffff",
-                      border: selected
-                        ? "2px solid #65b9f5"
-                        : "1px solid #e0eaf0",
-                      borderRadius: "16px",
+                      background:
+                        selected
+                          ? "#eaf6ff"
+                          : "#ffffff",
+                      border:
+                        selected
+                          ? "2px solid #65b9f5"
+                          : "1px solid #e0eaf0",
+                      borderRadius:
+                        "16px",
                       padding: "20px",
-                      cursor: "pointer",
+                      cursor:
+                        "pointer",
                       transition:
                         "all 0.2s ease",
                     }}
                   >
                     <div
                       style={{
-                        display: "flex",
+                        display:
+                          "flex",
                         justifyContent:
                           "space-between",
                         alignItems:
@@ -1167,7 +1392,8 @@ function App() {
                       <h3
                         style={{
                           margin: 0,
-                          fontSize: "17px",
+                          fontSize:
+                            "17px",
                           color:
                             "#1d3444",
                         }}
@@ -1217,8 +1443,10 @@ function App() {
                 style={{
                   marginTop: "25px",
                   padding: "20px",
-                  background: "#f7fcff",
-                  borderRadius: "15px",
+                  background:
+                    "#f7fcff",
+                  borderRadius:
+                    "15px",
                   border:
                     "1px solid #dceffb",
                 }}
@@ -1227,7 +1455,8 @@ function App() {
                   style={{
                     fontSize: "13px",
                     color: "#748592",
-                    marginBottom: "5px",
+                    marginBottom:
+                      "5px",
                   }}
                 >
                   Selected Field
@@ -1236,27 +1465,36 @@ function App() {
                 <div
                   style={{
                     fontSize: "20px",
-                    fontWeight: "700",
-                    color: "#1d3444",
+                    fontWeight:
+                      "700",
+                    color:
+                      "#1d3444",
                   }}
                 >
                   {selectedFieldName}
                 </div>
 
                 <button
-                  onClick={continueToMajor}
+                  onClick={
+                    continueToMajor
+                  }
                   style={{
-                    marginTop: "18px",
+                    marginTop:
+                      "18px",
                     border: "none",
                     background:
                       "#65b9f5",
                     color: "#fff",
                     padding:
                       "13px 22px",
-                    borderRadius: "10px",
-                    cursor: "pointer",
-                    fontWeight: "700",
-                    fontSize: "14px",
+                    borderRadius:
+                      "10px",
+                    cursor:
+                      "pointer",
+                    fontWeight:
+                      "700",
+                    fontSize:
+                      "14px",
                   }}
                 >
                   Continue to Major →
@@ -1273,9 +1511,11 @@ function App() {
                 id="major-section"
                 style={{
                   background: "#fff",
-                  borderRadius: "22px",
+                  borderRadius:
+                    "22px",
                   padding: "30px",
-                  marginBottom: "30px",
+                  marginBottom:
+                    "30px",
                   boxShadow:
                     "0 8px 30px rgba(44, 110, 150, 0.07)",
                   scrollMarginTop:
@@ -1284,12 +1524,14 @@ function App() {
               >
                 <div
                   style={{
-                    marginBottom: "25px",
+                    marginBottom:
+                      "25px",
                   }}
                 >
                   <div
                     style={{
-                      fontSize: "13px",
+                      fontSize:
+                        "13px",
                       color:
                         "#65b9f5",
                       fontWeight:
@@ -1319,9 +1561,10 @@ function App() {
                         "#71808d",
                     }}
                   >
-                    Choose the major you
-                    want to study within
-                    your selected field.
+                    Choose the major
+                    you want to study
+                    within your
+                    selected field.
                   </p>
                 </div>
 
@@ -1374,7 +1617,8 @@ function App() {
                               "center",
                             justifyContent:
                               "space-between",
-                            gap: "12px",
+                            gap:
+                              "12px",
                           }}
                         >
                           <span
@@ -1474,6 +1718,284 @@ function App() {
                       Major saved
                       successfully.
                     </div>
+
+                    <button
+                      onClick={
+                        continueToBudget
+                      }
+                      style={{
+                        marginTop:
+                          "18px",
+                        border:
+                          "none",
+                        background:
+                          "#65b9f5",
+                        color:
+                          "#fff",
+                        padding:
+                          "13px 22px",
+                        borderRadius:
+                          "10px",
+                        cursor:
+                          "pointer",
+                        fontWeight:
+                          "700",
+                        fontSize:
+                          "14px",
+                      }}
+                    >
+                      Continue to Budget →
+                    </button>
+                  </div>
+                )}
+              </section>
+            )}
+
+          {/* BUDGET SECTION */}
+
+          {showBudgetStep &&
+            selectedMajor && (
+              <section
+                id="budget-section"
+                style={{
+                  background: "#fff",
+                  borderRadius:
+                    "22px",
+                  padding: "30px",
+                  marginBottom:
+                    "30px",
+                  boxShadow:
+                    "0 8px 30px rgba(44, 110, 150, 0.07)",
+                  scrollMarginTop:
+                    "90px",
+                }}
+              >
+                <div
+                  style={{
+                    marginBottom:
+                      "25px",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize:
+                        "13px",
+                      color:
+                        "#65b9f5",
+                      fontWeight:
+                        "700",
+                      marginBottom:
+                        "8px",
+                    }}
+                  >
+                    {selectedFieldName}{" "}
+                    •{" "}
+                    {selectedMajorName}
+                  </div>
+
+                  <h2
+                    style={{
+                      margin:
+                        "0 0 8px",
+                      fontSize:
+                        "27px",
+                    }}
+                  >
+                    Choose Your Budget
+                  </h2>
+
+                  <p
+                    style={{
+                      margin: 0,
+                      color:
+                        "#71808d",
+                    }}
+                  >
+                    Select your approximate
+                    annual tuition budget.
+                  </p>
+                </div>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns:
+                      "repeat(auto-fit, minmax(220px, 1fr))",
+                    gap: "15px",
+                  }}
+                >
+                  {budgets.map(
+                    (budget) => {
+                      const selected =
+                        selectedBudget ===
+                        budget.id;
+
+                      return (
+                        <button
+                          key={
+                            budget.id
+                          }
+                          onClick={() =>
+                            handleBudgetSelect(
+                              budget
+                            )
+                          }
+                          style={{
+                            textAlign:
+                              "left",
+                            background:
+                              selected
+                                ? "#eaf6ff"
+                                : "#fff",
+                            border:
+                              selected
+                                ? "2px solid #65b9f5"
+                                : "1px solid #e0eaf0",
+                            borderRadius:
+                              "15px",
+                            padding:
+                              "20px",
+                            cursor:
+                              "pointer",
+                            minHeight:
+                              "75px",
+                            display:
+                              "flex",
+                            alignItems:
+                              "center",
+                            justifyContent:
+                              "space-between",
+                            gap:
+                              "12px",
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontSize:
+                                "15px",
+                              fontWeight:
+                                selected
+                                  ? "700"
+                                  : "600",
+                              color:
+                                "#203746",
+                            }}
+                          >
+                            {
+                              budget.name
+                            }
+                          </span>
+
+                          {selected && (
+                            <span
+                              style={{
+                                color:
+                                  "#65b9f5",
+                                fontWeight:
+                                  "800",
+                                fontSize:
+                                  "18px",
+                              }}
+                            >
+                              ✓
+                            </span>
+                          )}
+                        </button>
+                      );
+                    }
+                  )}
+                </div>
+
+                {/* SELECTED BUDGET */}
+
+                {selectedBudget && (
+                  <div
+                    style={{
+                      marginTop:
+                        "25px",
+                      padding:
+                        "20px",
+                      background:
+                        "#f7fcff",
+                      borderRadius:
+                        "15px",
+                      border:
+                        "1px solid #dceffb",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize:
+                          "13px",
+                        color:
+                          "#748592",
+                        marginBottom:
+                          "5px",
+                      }}
+                    >
+                      Selected Budget
+                    </div>
+
+                    <div
+                      style={{
+                        fontSize:
+                          "20px",
+                        fontWeight:
+                          "700",
+                        color:
+                          "#1d3444",
+                      }}
+                    >
+                      {
+                        selectedBudgetName
+                      }
+                    </div>
+
+                    <div
+                      style={{
+                        marginTop:
+                          "12px",
+                        fontSize:
+                          "13px",
+                        color:
+                          "#65b9f5",
+                        fontWeight:
+                          "600",
+                      }}
+                    >
+                      Budget saved
+                      successfully.
+                    </div>
+
+                    <button
+                      onClick={() =>
+                        alert(
+                          "University step will be added next."
+                        )
+                      }
+                      style={{
+                        marginTop:
+                          "18px",
+                        border:
+                          "none",
+                        background:
+                          "#65b9f5",
+                        color:
+                          "#fff",
+                        padding:
+                          "13px 22px",
+                        borderRadius:
+                          "10px",
+                        cursor:
+                          "pointer",
+                        fontWeight:
+                          "700",
+                        fontSize:
+                          "14px",
+                      }}
+                    >
+                      Continue to University →
+                    </button>
                   </div>
                 )}
               </section>
@@ -1481,12 +2003,17 @@ function App() {
 
           {/* CURRENT SELECTION SUMMARY */}
 
-          {(selectedField ||
-            selectedMajor) && (
+          {(
+            selectedField ||
+            selectedMajor ||
+            selectedBudget
+          ) && (
             <div
               style={{
-                background: "#ffffff",
-                borderRadius: "18px",
+                background:
+                  "#ffffff",
+                borderRadius:
+                  "18px",
                 padding: "22px",
                 border:
                   "1px solid #e5eef5",
@@ -1496,8 +2023,10 @@ function App() {
                 style={{
                   fontSize: "13px",
                   color: "#71808d",
-                  marginBottom: "12px",
-                  fontWeight: "700",
+                  marginBottom:
+                    "12px",
+                  fontWeight:
+                    "700",
                 }}
               >
                 YOUR CURRENT SELECTION
@@ -1506,7 +2035,8 @@ function App() {
               <div
                 style={{
                   display: "flex",
-                  flexWrap: "wrap",
+                  flexWrap:
+                    "wrap",
                   gap: "12px",
                 }}
               >
@@ -1557,6 +2087,30 @@ function App() {
                     </strong>
                   </div>
                 )}
+
+                {selectedBudgetName && (
+                  <div
+                    style={{
+                      padding:
+                        "10px 15px",
+                      background:
+                        "#eaf6ff",
+                      borderRadius:
+                        "10px",
+                      color:
+                        "#24516d",
+                      fontSize:
+                        "14px",
+                    }}
+                  >
+                    Budget:{" "}
+                    <strong>
+                      {
+                        selectedBudgetName
+                      }
+                    </strong>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -1566,7 +2120,7 @@ function App() {
   }
 
   /* =========================
-     LANDING PAGE
+  LANDING PAGE
   ========================= */
 
   return (
@@ -1623,13 +2177,17 @@ function App() {
             <button
               onClick={openLogin}
               style={{
-                background: "transparent",
+                background:
+                  "transparent",
                 border: "none",
                 padding:
                   "10px 15px",
-                cursor: "pointer",
-                fontWeight: "600",
-                color: "#304655",
+                cursor:
+                  "pointer",
+                fontWeight:
+                  "600",
+                color:
+                  "#304655",
               }}
             >
               Login
@@ -1646,8 +2204,10 @@ function App() {
                   "11px 18px",
                 borderRadius:
                   "10px",
-                cursor: "pointer",
-                fontWeight: "700",
+                cursor:
+                  "pointer",
+                fontWeight:
+                  "700",
               }}
             >
               Sign up
@@ -1676,7 +2236,8 @@ function App() {
             margin: "auto",
             padding:
               "70px 24px",
-            textAlign: "center",
+            textAlign:
+              "center",
           }}
         >
           <div
@@ -1741,7 +2302,9 @@ function App() {
           </p>
 
           <button
-            onClick={startApplication}
+            onClick={
+              startApplication
+            }
             style={{
               background:
                 "#65b9f5",
@@ -1957,7 +2520,9 @@ function App() {
             ].map(
               (university) => (
                 <div
-                  key={university}
+                  key={
+                    university
+                  }
                   style={{
                     background:
                       "#ffffff",
@@ -2101,7 +2666,9 @@ function App() {
         </p>
 
         <button
-          onClick={openRegister}
+          onClick={
+            openRegister
+          }
           style={{
             background:
               "#65b9f5",
@@ -2163,7 +2730,9 @@ function App() {
             padding:
               "20px",
           }}
-          onClick={closeAuth}
+          onClick={
+            closeAuth
+          }
         >
           <div
             style={{
@@ -2187,7 +2756,9 @@ function App() {
             }
           >
             <button
-              onClick={closeAuth}
+              onClick={
+                closeAuth
+              }
               style={{
                 position:
                   "absolute",
@@ -2322,7 +2893,9 @@ function App() {
             </div>
 
             <form
-              onSubmit={handleAuth}
+              onSubmit={
+                handleAuth
+              }
             >
               {authMode ===
                 "register" && (
