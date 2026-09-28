@@ -822,7 +822,7 @@ function App() {
       );
 
       alert(
-        "We couldn't save your field. Please try again."
+        `Firebase error: ${error.code || "unknown"}\n${error.message || "Unknown error"}`
       );
     }
   };
@@ -900,7 +900,7 @@ function App() {
       );
 
       alert(
-        "We couldn't save your major. Please try again."
+        `Firebase error: ${error.code || "unknown"}\n${error.message || "Unknown error"}`
       );
     }
   };
@@ -955,7 +955,7 @@ function App() {
       );
 
       alert(
-        "We couldn't continue to budget. Please try again."
+        `Firebase error: ${error.code || "unknown"}\n${error.message || "Unknown error"}`
       );
     }
   };
@@ -995,7 +995,7 @@ function App() {
       );
 
       alert(
-        "We couldn't save your budget. Please try again."
+        `Firebase error: ${error.code || "unknown"}\n${error.message || "Unknown error"}`
       );
     }
   };
