@@ -57,9 +57,26 @@ function App() {
   const [selectedBudget, setSelectedBudget] = useState("");
   const [selectedBudgetName, setSelectedBudgetName] = useState("");
 
-  const [applicationStep, setApplicationStep] = useState("field");
-  const [showMajorStep, setShowMajorStep] = useState(false);
-  const [showBudgetStep, setShowBudgetStep] = useState(false);
+  /* =========================
+  UNIVERSITY
+  ========================= */
+
+  const [selectedUniversity, setSelectedUniversity] =
+    useState("");
+  const [selectedUniversityName, setSelectedUniversityName] =
+    useState("");
+
+  const [applicationStep, setApplicationStep] =
+    useState("field");
+
+  const [showMajorStep, setShowMajorStep] =
+    useState(false);
+
+  const [showBudgetStep, setShowBudgetStep] =
+    useState(false);
+
+  const [showUniversityStep, setShowUniversityStep] =
+    useState(false);
 
   /* =========================
   FIELDS
@@ -436,6 +453,25 @@ function App() {
   ];
 
   /* =========================
+  UNIVERSITIES
+  ========================= */
+
+  const universities = [
+    {
+      id: "istanbul-aydin",
+      name: "Istanbul Aydın University",
+    },
+    {
+      id: "istanbul-gelisim",
+      name: "Istanbul Gelişim University",
+    },
+    {
+      id: "istinye",
+      name: "İstinye University",
+    },
+  ];
+
+  /* =========================
   AUTH STATE
   ========================= */
 
@@ -454,9 +490,12 @@ function App() {
           setSelectedMajorName("");
           setSelectedBudget("");
           setSelectedBudgetName("");
+          setSelectedUniversity("");
+          setSelectedUniversityName("");
           setApplicationStep("field");
           setShowMajorStep(false);
           setShowBudgetStep(false);
+          setShowUniversityStep(false);
         }
 
         setAuthLoading(false);
@@ -501,18 +540,39 @@ function App() {
           );
         }
 
+        if (data.selectedUniversity) {
+          setSelectedUniversity(
+            data.selectedUniversity
+          );
+          setSelectedUniversityName(
+            data.selectedUniversityName || ""
+          );
+        }
+
         if (data.applicationStep) {
-          setApplicationStep(data.applicationStep);
+          setApplicationStep(
+            data.applicationStep
+          );
 
           if (
             data.applicationStep === "major" ||
-            data.applicationStep === "budget"
+            data.applicationStep === "budget" ||
+            data.applicationStep === "university"
           ) {
             setShowMajorStep(true);
           }
 
-          if (data.applicationStep === "budget") {
+          if (
+            data.applicationStep === "budget" ||
+            data.applicationStep === "university"
+          ) {
             setShowBudgetStep(true);
+          }
+
+          if (
+            data.applicationStep === "university"
+          ) {
+            setShowUniversityStep(true);
           }
         }
       }
@@ -747,9 +807,12 @@ function App() {
       setSelectedMajorName("");
       setSelectedBudget("");
       setSelectedBudgetName("");
+      setSelectedUniversity("");
+      setSelectedUniversityName("");
       setApplicationStep("field");
       setShowMajorStep(false);
       setShowBudgetStep(false);
+      setShowUniversityStep(false);
     } catch (error) {
       console.error(error);
     }
@@ -768,6 +831,7 @@ function App() {
     setApplicationStep("field");
     setShowMajorStep(false);
     setShowBudgetStep(false);
+    setShowUniversityStep(false);
 
     window.scrollTo({
       top: 0,
@@ -788,14 +852,17 @@ function App() {
 
       /*
         When changing the field,
-        old major and budget must
-        not remain selected.
+        old major, budget and university
+        must not remain selected.
       */
 
       setSelectedMajor("");
       setSelectedMajorName("");
       setSelectedBudget("");
       setSelectedBudgetName("");
+      setSelectedUniversity("");
+      setSelectedUniversityName("");
+      setShowUniversityStep(false);
 
       await setDoc(
         doc(db, "users", user.uid),
@@ -806,6 +873,8 @@ function App() {
           selectedMajorName: "",
           selectedBudget: "",
           selectedBudgetName: "",
+          selectedUniversity: "",
+          selectedUniversityName: "",
           applicationStep: "field",
           updatedAt:
             new Date().toISOString(),
@@ -874,7 +943,10 @@ function App() {
 
       setSelectedBudget("");
       setSelectedBudgetName("");
+      setSelectedUniversity("");
+      setSelectedUniversityName("");
       setShowBudgetStep(false);
+      setShowUniversityStep(false);
 
       await setDoc(
         doc(db, "users", user.uid),
@@ -885,6 +957,8 @@ function App() {
           selectedMajorName: major.name,
           selectedBudget: "",
           selectedBudgetName: "",
+          selectedUniversity: "",
+          selectedUniversityName: "",
           applicationStep: "major",
           updatedAt:
             new Date().toISOString(),
@@ -971,6 +1045,16 @@ function App() {
       setSelectedBudget(budget.id);
       setSelectedBudgetName(budget.name);
 
+      /*
+        University comes after budget.
+        If the budget changes, the old
+        university selection should be reset.
+      */
+
+      setSelectedUniversity("");
+      setSelectedUniversityName("");
+      setShowUniversityStep(false);
+
       await setDoc(
         doc(db, "users", user.uid),
         {
@@ -980,6 +1064,8 @@ function App() {
           selectedMajorName,
           selectedBudget: budget.id,
           selectedBudgetName: budget.name,
+          selectedUniversity: "",
+          selectedUniversityName: "",
           applicationStep: "budget",
           updatedAt:
             new Date().toISOString(),
@@ -991,6 +1077,114 @@ function App() {
     } catch (error) {
       console.error(
         "Error saving budget:",
+        error
+      );
+
+      alert(
+        `Firebase error: ${error.code || "unknown"}\n${error.message || "Unknown error"}`
+      );
+    }
+  };
+
+  /* =========================
+  CONTINUE TO UNIVERSITY
+  ========================= */
+
+  const continueToUniversity = async () => {
+    if (!selectedBudget) {
+      alert(
+        "Please select a budget first."
+      );
+      return;
+    }
+
+    try {
+      setShowUniversityStep(true);
+      setApplicationStep("university");
+
+      await setDoc(
+        doc(db, "users", user.uid),
+        {
+          selectedField,
+          selectedFieldName,
+          selectedMajor,
+          selectedMajorName,
+          selectedBudget,
+          selectedBudgetName,
+          applicationStep: "university",
+          updatedAt:
+            new Date().toISOString(),
+        },
+        { merge: true }
+      );
+
+      setTimeout(() => {
+        const element =
+          document.getElementById(
+            "university-section"
+          );
+
+        if (element) {
+          element.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          });
+        }
+      }, 100);
+    } catch (error) {
+      console.error(
+        "Error moving to university:",
+        error
+      );
+
+      alert(
+        `Firebase error: ${error.code || "unknown"}\n${error.message || "Unknown error"}`
+      );
+    }
+  };
+
+  /* =========================
+  SELECT UNIVERSITY
+  ========================= */
+
+  const handleUniversitySelect = async (
+    university
+  ) => {
+    if (!user || !selectedBudget) return;
+
+    try {
+      setSelectedUniversity(
+        university.id
+      );
+
+      setSelectedUniversityName(
+        university.name
+      );
+
+      await setDoc(
+        doc(db, "users", user.uid),
+        {
+          selectedField,
+          selectedFieldName,
+          selectedMajor,
+          selectedMajorName,
+          selectedBudget,
+          selectedBudgetName,
+          selectedUniversity:
+            university.id,
+          selectedUniversityName:
+            university.name,
+          applicationStep: "university",
+          updatedAt:
+            new Date().toISOString(),
+        },
+        { merge: true }
+      );
+
+      setApplicationStep("university");
+    } catch (error) {
+      console.error(
+        "Error saving university:",
         error
       );
 
@@ -1149,9 +1343,9 @@ function App() {
                 fontSize: "16px",
               }}
             >
-              Choose your field, major
-              and budget to continue
-              your application.
+              Choose your field, major,
+              budget and university to
+              continue your application.
             </p>
           </div>
 
@@ -1205,7 +1399,9 @@ function App() {
                       applicationStep ===
                         "major" ||
                       applicationStep ===
-                        "budget");
+                        "budget" ||
+                      applicationStep ===
+                        "university");
                 }
 
                 if (step === "Major") {
@@ -1214,13 +1410,17 @@ function App() {
                       applicationStep ===
                         "major") &&
                     applicationStep !==
-                      "budget";
+                      "budget" &&
+                    applicationStep !==
+                      "university";
 
                   completed =
                     !!selectedMajor &&
                     (showBudgetStep ||
                       applicationStep ===
-                        "budget");
+                        "budget" ||
+                      applicationStep ===
+                        "university");
                 }
 
                 if (step === "Budget") {
@@ -1230,7 +1430,20 @@ function App() {
                       "budget";
 
                   completed =
-                    !!selectedBudget;
+                    !!selectedBudget &&
+                    (showUniversityStep ||
+                      applicationStep ===
+                        "university");
+                }
+
+                if (step === "University") {
+                  active =
+                    showUniversityStep ||
+                    applicationStep ===
+                      "university";
+
+                  completed =
+                    !!selectedUniversity;
                 }
 
                 return (
@@ -1968,10 +2181,8 @@ function App() {
                     </div>
 
                     <button
-                      onClick={() =>
-                        alert(
-                          "University step will be added next."
-                        )
+                      onClick={
+                        continueToUniversity
                       }
                       style={{
                         marginTop:
@@ -2001,12 +2212,266 @@ function App() {
               </section>
             )}
 
+          {/* UNIVERSITY SECTION */}
+
+          {showUniversityStep &&
+            selectedBudget && (
+              <section
+                id="university-section"
+                style={{
+                  background: "#fff",
+                  borderRadius:
+                    "22px",
+                  padding: "30px",
+                  marginBottom:
+                    "30px",
+                  boxShadow:
+                    "0 8px 30px rgba(44, 110, 150, 0.07)",
+                  scrollMarginTop:
+                    "90px",
+                }}
+              >
+                <div
+                  style={{
+                    marginBottom:
+                      "25px",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize:
+                        "13px",
+                      color:
+                        "#65b9f5",
+                      fontWeight:
+                        "700",
+                      marginBottom:
+                        "8px",
+                    }}
+                  >
+                    {selectedFieldName}{" "}
+                    •{" "}
+                    {selectedMajorName}{" "}
+                    •{" "}
+                    {selectedBudgetName}
+                  </div>
+
+                  <h2
+                    style={{
+                      margin:
+                        "0 0 8px",
+                      fontSize:
+                        "27px",
+                    }}
+                  >
+                    Choose Your University
+                  </h2>
+
+                  <p
+                    style={{
+                      margin: 0,
+                      color:
+                        "#71808d",
+                    }}
+                  >
+                    Select the university
+                    where you would like
+                    to study.
+                  </p>
+                </div>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns:
+                      "repeat(auto-fit, minmax(220px, 1fr))",
+                    gap: "15px",
+                  }}
+                >
+                  {universities.map(
+                    (university) => {
+                      const selected =
+                        selectedUniversity ===
+                        university.id;
+
+                      return (
+                        <button
+                          key={
+                            university.id
+                          }
+                          onClick={() =>
+                            handleUniversitySelect(
+                              university
+                            )
+                          }
+                          style={{
+                            textAlign:
+                              "left",
+                            background:
+                              selected
+                                ? "#eaf6ff"
+                                : "#fff",
+                            border:
+                              selected
+                                ? "2px solid #65b9f5"
+                                : "1px solid #e0eaf0",
+                            borderRadius:
+                              "15px",
+                            padding:
+                              "20px",
+                            cursor:
+                              "pointer",
+                            minHeight:
+                              "80px",
+                            display:
+                              "flex",
+                            alignItems:
+                              "center",
+                            justifyContent:
+                              "space-between",
+                            gap:
+                              "12px",
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontSize:
+                                "15px",
+                              fontWeight:
+                                selected
+                                  ? "700"
+                                  : "600",
+                              color:
+                                "#203746",
+                            }}
+                          >
+                            {
+                              university.name
+                            }
+                          </span>
+
+                          {selected && (
+                            <span
+                              style={{
+                                color:
+                                  "#65b9f5",
+                                fontWeight:
+                                  "800",
+                                fontSize:
+                                  "18px",
+                              }}
+                            >
+                              ✓
+                            </span>
+                          )}
+                        </button>
+                      );
+                    }
+                  )}
+                </div>
+
+                {/* SELECTED UNIVERSITY */}
+
+                {selectedUniversity && (
+                  <div
+                    style={{
+                      marginTop:
+                        "25px",
+                      padding:
+                        "20px",
+                      background:
+                        "#f7fcff",
+                      borderRadius:
+                        "15px",
+                      border:
+                        "1px solid #dceffb",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize:
+                          "13px",
+                        color:
+                          "#748592",
+                        marginBottom:
+                          "5px",
+                      }}
+                    >
+                      Selected University
+                    </div>
+
+                    <div
+                      style={{
+                        fontSize:
+                          "20px",
+                        fontWeight:
+                          "700",
+                        color:
+                          "#1d3444",
+                      }}
+                    >
+                      {
+                        selectedUniversityName
+                      }
+                    </div>
+
+                    <div
+                      style={{
+                        marginTop:
+                          "12px",
+                        fontSize:
+                          "13px",
+                        color:
+                          "#65b9f5",
+                        fontWeight:
+                          "600",
+                      }}
+                    >
+                      University saved
+                      successfully.
+                    </div>
+
+                    <button
+                      onClick={() =>
+                        alert(
+                          "Program step will be added next."
+                        )
+                      }
+                      style={{
+                        marginTop:
+                          "18px",
+                        border:
+                          "none",
+                        background:
+                          "#65b9f5",
+                        color:
+                          "#fff",
+                        padding:
+                          "13px 22px",
+                        borderRadius:
+                          "10px",
+                        cursor:
+                          "pointer",
+                        fontWeight:
+                          "700",
+                        fontSize:
+                          "14px",
+                      }}
+                    >
+                      Continue to Program →
+                    </button>
+                  </div>
+                )}
+              </section>
+            )}
+
           {/* CURRENT SELECTION SUMMARY */}
 
           {(
             selectedField ||
             selectedMajor ||
-            selectedBudget
+            selectedBudget ||
+            selectedUniversity
           ) && (
             <div
               style={{
@@ -2107,6 +2572,30 @@ function App() {
                     <strong>
                       {
                         selectedBudgetName
+                      }
+                    </strong>
+                  </div>
+                )}
+
+                {selectedUniversityName && (
+                  <div
+                    style={{
+                      padding:
+                        "10px 15px",
+                      background:
+                        "#eaf6ff",
+                      borderRadius:
+                        "10px",
+                      color:
+                        "#24516d",
+                      fontSize:
+                        "14px",
+                    }}
+                  >
+                    University:{" "}
+                    <strong>
+                      {
+                        selectedUniversityName
                       }
                     </strong>
                   </div>
