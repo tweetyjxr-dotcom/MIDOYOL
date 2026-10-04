@@ -14,6 +14,13 @@ import {
   setDoc,
 } from "firebase/firestore";
 
+import {
+  getStorage,
+  ref,
+  uploadBytes,
+  getDownloadURL,
+} from "firebase/storage";
+
 import { auth, db } from "./firebase";
 
 function App() {
@@ -63,8 +70,35 @@ function App() {
 
   const [selectedUniversity, setSelectedUniversity] =
     useState("");
+
   const [selectedUniversityName, setSelectedUniversityName] =
     useState("");
+
+  /* =========================
+  PROGRAM
+  ========================= */
+
+  const [selectedProgram, setSelectedProgram] =
+    useState("");
+
+  const [selectedProgramName, setSelectedProgramName] =
+    useState("");
+
+  /* =========================
+  DOCUMENTS
+  ========================= */
+
+  const [documents, setDocuments] = useState({
+    passport: null,
+    certificate: null,
+    transcript: null,
+  });
+
+  const [documentUploading, setDocumentUploading] =
+    useState("");
+
+  const [documentsSaved, setDocumentsSaved] =
+    useState(false);
 
   const [applicationStep, setApplicationStep] =
     useState("field");
@@ -76,6 +110,12 @@ function App() {
     useState(false);
 
   const [showUniversityStep, setShowUniversityStep] =
+    useState(false);
+
+  const [showProgramStep, setShowProgramStep] =
+    useState(false);
+
+  const [showDocumentsStep, setShowDocumentsStep] =
     useState(false);
 
   /* =========================
@@ -472,6 +512,29 @@ function App() {
   ];
 
   /* =========================
+  PROGRAM TYPES
+  ========================= */
+
+  const programTypes = [
+    {
+      id: "diploma",
+      name: "Diploma",
+    },
+    {
+      id: "bachelors",
+      name: "Bachelor's Degree",
+    },
+    {
+      id: "masters",
+      name: "Master's Degree",
+    },
+    {
+      id: "phd",
+      name: "PhD",
+    },
+  ];
+
+  /* =========================
   AUTH STATE
   ========================= */
 
@@ -482,7 +545,9 @@ function App() {
         setUser(currentUser);
 
         if (currentUser) {
-          await loadApplication(currentUser.uid);
+          await loadApplication(
+            currentUser.uid
+          );
         } else {
           setSelectedField("");
           setSelectedFieldName("");
@@ -492,10 +557,24 @@ function App() {
           setSelectedBudgetName("");
           setSelectedUniversity("");
           setSelectedUniversityName("");
+          setSelectedProgram("");
+          setSelectedProgramName("");
+
+          setDocuments({
+            passport: null,
+            certificate: null,
+            transcript: null,
+          });
+
+          setDocumentUploading("");
+          setDocumentsSaved(false);
+
           setApplicationStep("field");
           setShowMajorStep(false);
           setShowBudgetStep(false);
           setShowUniversityStep(false);
+          setShowProgramStep(false);
+          setShowDocumentsStep(false);
         }
 
         setAuthLoading(false);
@@ -544,8 +623,42 @@ function App() {
           setSelectedUniversity(
             data.selectedUniversity
           );
+
           setSelectedUniversityName(
             data.selectedUniversityName || ""
+          );
+        }
+
+        if (data.selectedProgram) {
+          setSelectedProgram(
+            data.selectedProgram
+          );
+
+          setSelectedProgramName(
+            data.selectedProgramName || ""
+          );
+        }
+
+        if (data.documents) {
+          setDocuments({
+            passport:
+              data.documents.passport ||
+              null,
+            certificate:
+              data.documents.certificate ||
+              null,
+            transcript:
+              data.documents.transcript ||
+              null,
+          });
+
+          const uploadedCount =
+            Object.values(
+              data.documents
+            ).filter(Boolean).length;
+
+          setDocumentsSaved(
+            uploadedCount > 0
           );
         }
 
@@ -557,22 +670,41 @@ function App() {
           if (
             data.applicationStep === "major" ||
             data.applicationStep === "budget" ||
-            data.applicationStep === "university"
+            data.applicationStep === "university" ||
+            data.applicationStep === "program" ||
+            data.applicationStep === "documents"
           ) {
             setShowMajorStep(true);
           }
 
           if (
             data.applicationStep === "budget" ||
-            data.applicationStep === "university"
+            data.applicationStep === "university" ||
+            data.applicationStep === "program" ||
+            data.applicationStep === "documents"
           ) {
             setShowBudgetStep(true);
           }
 
           if (
-            data.applicationStep === "university"
+            data.applicationStep === "university" ||
+            data.applicationStep === "program" ||
+            data.applicationStep === "documents"
           ) {
             setShowUniversityStep(true);
+          }
+
+          if (
+            data.applicationStep === "program" ||
+            data.applicationStep === "documents"
+          ) {
+            setShowProgramStep(true);
+          }
+
+          if (
+            data.applicationStep === "documents"
+          ) {
+            setShowDocumentsStep(true);
           }
         }
       }
@@ -593,7 +725,8 @@ function App() {
   const goTo = (id) => {
     setMenuOpen(false);
 
-    const element = document.getElementById(id);
+    const element =
+      document.getElementById(id);
 
     if (element) {
       element.scrollIntoView({
@@ -648,7 +781,9 @@ function App() {
 
     if (authMode === "register") {
       if (!name.trim()) {
-        setAuthError("Please enter your name.");
+        setAuthError(
+          "Please enter your name."
+        );
         return;
       }
 
@@ -683,7 +818,11 @@ function App() {
         });
 
         await setDoc(
-          doc(db, "users", result.user.uid),
+          doc(
+            db,
+            "users",
+            result.user.uid
+          ),
           {
             uid: result.user.uid,
             name: name.trim(),
@@ -763,35 +902,36 @@ function App() {
   FORGOT PASSWORD
   ========================= */
 
-  const handleForgotPassword = async () => {
-    setAuthError("");
-    setAuthSuccess("");
+  const handleForgotPassword =
+    async () => {
+      setAuthError("");
+      setAuthSuccess("");
 
-    if (!email) {
-      setAuthError(
-        "Enter your email first."
-      );
-      return;
-    }
+      if (!email) {
+        setAuthError(
+          "Enter your email first."
+        );
+        return;
+      }
 
-    try {
-      await sendPasswordResetEmail(
-        auth,
-        email
-      );
+      try {
+        await sendPasswordResetEmail(
+          auth,
+          email
+        );
 
-      setAuthSuccess(
-        "Password reset email sent."
-      );
-    } catch (error) {
-      console.error(error);
+        setAuthSuccess(
+          "Password reset email sent."
+        );
+      } catch (error) {
+        console.error(error);
 
-      setAuthError(
-        error.message ||
-          "Unable to send reset email."
-      );
-    }
-  };
+        setAuthError(
+          error.message ||
+            "Unable to send reset email."
+        );
+      }
+    };
 
   /* =========================
   LOGOUT
@@ -809,10 +949,24 @@ function App() {
       setSelectedBudgetName("");
       setSelectedUniversity("");
       setSelectedUniversityName("");
+      setSelectedProgram("");
+      setSelectedProgramName("");
+
+      setDocuments({
+        passport: null,
+        certificate: null,
+        transcript: null,
+      });
+
+      setDocumentUploading("");
+      setDocumentsSaved(false);
+
       setApplicationStep("field");
       setShowMajorStep(false);
       setShowBudgetStep(false);
       setShowUniversityStep(false);
+      setShowProgramStep(false);
+      setShowDocumentsStep(false);
     } catch (error) {
       console.error(error);
     }
@@ -832,6 +986,8 @@ function App() {
     setShowMajorStep(false);
     setShowBudgetStep(false);
     setShowUniversityStep(false);
+    setShowProgramStep(false);
+    setShowDocumentsStep(false);
 
     window.scrollTo({
       top: 0,
@@ -843,58 +999,90 @@ function App() {
   SELECT FIELD
   ========================= */
 
-  const handleFieldSelect = async (field) => {
-    if (!user) return;
+  const handleFieldSelect =
+    async (field) => {
+      if (!user) return;
 
-    try {
-      setSelectedField(field.id);
-      setSelectedFieldName(field.name);
+      try {
+        setSelectedField(field.id);
+        setSelectedFieldName(field.name);
 
-      /*
-        When changing the field,
-        old major, budget and university
-        must not remain selected.
-      */
+        /*
+          Changing the field resets
+          everything after field.
+        */
 
-      setSelectedMajor("");
-      setSelectedMajorName("");
-      setSelectedBudget("");
-      setSelectedBudgetName("");
-      setSelectedUniversity("");
-      setSelectedUniversityName("");
-      setShowUniversityStep(false);
+        setSelectedMajor("");
+        setSelectedMajorName("");
 
-      await setDoc(
-        doc(db, "users", user.uid),
-        {
-          selectedField: field.id,
-          selectedFieldName: field.name,
-          selectedMajor: "",
-          selectedMajorName: "",
-          selectedBudget: "",
-          selectedBudgetName: "",
-          selectedUniversity: "",
-          selectedUniversityName: "",
-          applicationStep: "field",
-          updatedAt:
-            new Date().toISOString(),
-        },
-        { merge: true }
-      );
+        setSelectedBudget("");
+        setSelectedBudgetName("");
 
-      setApplicationStep("field");
-      setShowBudgetStep(false);
-    } catch (error) {
-      console.error(
-        "Error saving field:",
-        error
-      );
+        setSelectedUniversity("");
+        setSelectedUniversityName("");
 
-      alert(
-        `Firebase error: ${error.code || "unknown"}\n${error.message || "Unknown error"}`
-      );
-    }
-  };
+        setSelectedProgram("");
+        setSelectedProgramName("");
+
+        setDocuments({
+          passport: null,
+          certificate: null,
+          transcript: null,
+        });
+
+        setDocumentUploading("");
+        setDocumentsSaved(false);
+
+        setShowUniversityStep(false);
+        setShowProgramStep(false);
+        setShowDocumentsStep(false);
+
+        await setDoc(
+          doc(db, "users", user.uid),
+          {
+            selectedField: field.id,
+            selectedFieldName: field.name,
+
+            selectedMajor: "",
+            selectedMajorName: "",
+
+            selectedBudget: "",
+            selectedBudgetName: "",
+
+            selectedUniversity: "",
+            selectedUniversityName: "",
+
+            selectedProgram: "",
+            selectedProgramName: "",
+
+            documents: {},
+
+            applicationStep: "field",
+
+            updatedAt:
+              new Date().toISOString(),
+          },
+          { merge: true }
+        );
+
+        setApplicationStep("field");
+        setShowBudgetStep(false);
+      } catch (error) {
+        console.error(
+          "Error saving field:",
+          error
+        );
+
+        alert(
+          `Firebase error: ${
+            error.code || "unknown"
+          }\n${
+            error.message ||
+            "Unknown error"
+          }`
+        );
+      }
+    };
 
   /* =========================
   CONTINUE TO MAJOR
@@ -929,270 +1117,690 @@ function App() {
   SELECT MAJOR
   ========================= */
 
-  const handleMajorSelect = async (major) => {
-    if (!user || !selectedField) return;
+  const handleMajorSelect =
+    async (major) => {
+      if (!user || !selectedField)
+        return;
 
-    try {
-      setSelectedMajor(major.id);
-      setSelectedMajorName(major.name);
+      try {
+        setSelectedMajor(major.id);
+        setSelectedMajorName(major.name);
 
-      /*
-        Changing the major resets
-        anything after major.
-      */
+        /*
+          Changing the major resets
+          everything after major.
+        */
 
-      setSelectedBudget("");
-      setSelectedBudgetName("");
-      setSelectedUniversity("");
-      setSelectedUniversityName("");
-      setShowBudgetStep(false);
-      setShowUniversityStep(false);
+        setSelectedBudget("");
+        setSelectedBudgetName("");
 
-      await setDoc(
-        doc(db, "users", user.uid),
-        {
-          selectedField,
-          selectedFieldName,
-          selectedMajor: major.id,
-          selectedMajorName: major.name,
-          selectedBudget: "",
-          selectedBudgetName: "",
-          selectedUniversity: "",
-          selectedUniversityName: "",
-          applicationStep: "major",
-          updatedAt:
-            new Date().toISOString(),
-        },
-        { merge: true }
-      );
+        setSelectedUniversity("");
+        setSelectedUniversityName("");
 
-      setApplicationStep("major");
-    } catch (error) {
-      console.error(
-        "Error saving major:",
-        error
-      );
+        setSelectedProgram("");
+        setSelectedProgramName("");
 
-      alert(
-        `Firebase error: ${error.code || "unknown"}\n${error.message || "Unknown error"}`
-      );
-    }
-  };
+        setDocuments({
+          passport: null,
+          certificate: null,
+          transcript: null,
+        });
+
+        setDocumentUploading("");
+        setDocumentsSaved(false);
+
+        setShowBudgetStep(false);
+        setShowUniversityStep(false);
+        setShowProgramStep(false);
+        setShowDocumentsStep(false);
+
+        await setDoc(
+          doc(db, "users", user.uid),
+          {
+            selectedField,
+            selectedFieldName,
+
+            selectedMajor: major.id,
+            selectedMajorName: major.name,
+
+            selectedBudget: "",
+            selectedBudgetName: "",
+
+            selectedUniversity: "",
+            selectedUniversityName: "",
+
+            selectedProgram: "",
+            selectedProgramName: "",
+
+            documents: {},
+
+            applicationStep: "major",
+
+            updatedAt:
+              new Date().toISOString(),
+          },
+          { merge: true }
+        );
+
+        setApplicationStep("major");
+      } catch (error) {
+        console.error(
+          "Error saving major:",
+          error
+        );
+
+        alert(
+          `Firebase error: ${
+            error.code || "unknown"
+          }\n${
+            error.message ||
+            "Unknown error"
+          }`
+        );
+      }
+    };
 
   /* =========================
   CONTINUE TO BUDGET
   ========================= */
 
-  const continueToBudget = async () => {
-    if (!selectedMajor) {
-      alert(
-        "Please select a major first."
-      );
-      return;
-    }
+  const continueToBudget =
+    async () => {
+      if (!selectedMajor) {
+        alert(
+          "Please select a major first."
+        );
+        return;
+      }
 
-    try {
-      setShowBudgetStep(true);
-      setApplicationStep("budget");
+      try {
+        setShowBudgetStep(true);
+        setApplicationStep("budget");
 
-      await setDoc(
-        doc(db, "users", user.uid),
-        {
-          selectedField,
-          selectedFieldName,
-          selectedMajor,
-          selectedMajorName,
-          applicationStep: "budget",
-          updatedAt:
-            new Date().toISOString(),
-        },
-        { merge: true }
-      );
+        await setDoc(
+          doc(db, "users", user.uid),
+          {
+            selectedField,
+            selectedFieldName,
+            selectedMajor,
+            selectedMajorName,
+            applicationStep: "budget",
+            updatedAt:
+              new Date().toISOString(),
+          },
+          { merge: true }
+        );
 
-      setTimeout(() => {
-        const element =
-          document.getElementById(
-            "budget-section"
-          );
+        setTimeout(() => {
+          const element =
+            document.getElementById(
+              "budget-section"
+            );
 
-        if (element) {
-          element.scrollIntoView({
-            behavior: "smooth",
-            block: "start",
-          });
-        }
-      }, 100);
-    } catch (error) {
-      console.error(
-        "Error moving to budget:",
-        error
-      );
+          if (element) {
+            element.scrollIntoView({
+              behavior: "smooth",
+              block: "start",
+            });
+          }
+        }, 100);
+      } catch (error) {
+        console.error(
+          "Error moving to budget:",
+          error
+        );
 
-      alert(
-        `Firebase error: ${error.code || "unknown"}\n${error.message || "Unknown error"}`
-      );
-    }
-  };
+        alert(
+          `Firebase error: ${
+            error.code || "unknown"
+          }\n${
+            error.message ||
+            "Unknown error"
+          }`
+        );
+      }
+    };
 
   /* =========================
   SELECT BUDGET
   ========================= */
 
-  const handleBudgetSelect = async (budget) => {
-    if (!user || !selectedMajor) return;
+  const handleBudgetSelect =
+    async (budget) => {
+      if (!user || !selectedMajor)
+        return;
 
-    try {
-      setSelectedBudget(budget.id);
-      setSelectedBudgetName(budget.name);
+      try {
+        setSelectedBudget(budget.id);
+        setSelectedBudgetName(
+          budget.name
+        );
 
-      /*
-        University comes after budget.
-        If the budget changes, the old
-        university selection should be reset.
-      */
+        /*
+          Changing the budget resets
+          everything after budget.
+        */
 
-      setSelectedUniversity("");
-      setSelectedUniversityName("");
-      setShowUniversityStep(false);
+        setSelectedUniversity("");
+        setSelectedUniversityName("");
 
-      await setDoc(
-        doc(db, "users", user.uid),
-        {
-          selectedField,
-          selectedFieldName,
-          selectedMajor,
-          selectedMajorName,
-          selectedBudget: budget.id,
-          selectedBudgetName: budget.name,
-          selectedUniversity: "",
-          selectedUniversityName: "",
-          applicationStep: "budget",
-          updatedAt:
-            new Date().toISOString(),
-        },
-        { merge: true }
-      );
+        setSelectedProgram("");
+        setSelectedProgramName("");
 
-      setApplicationStep("budget");
-    } catch (error) {
-      console.error(
-        "Error saving budget:",
-        error
-      );
+        setDocuments({
+          passport: null,
+          certificate: null,
+          transcript: null,
+        });
 
-      alert(
-        `Firebase error: ${error.code || "unknown"}\n${error.message || "Unknown error"}`
-      );
-    }
-  };
+        setDocumentUploading("");
+        setDocumentsSaved(false);
+
+        setShowUniversityStep(false);
+        setShowProgramStep(false);
+        setShowDocumentsStep(false);
+
+        await setDoc(
+          doc(db, "users", user.uid),
+          {
+            selectedField,
+            selectedFieldName,
+
+            selectedMajor,
+            selectedMajorName,
+
+            selectedBudget: budget.id,
+            selectedBudgetName: budget.name,
+
+            selectedUniversity: "",
+            selectedUniversityName: "",
+
+            selectedProgram: "",
+            selectedProgramName: "",
+
+            documents: {},
+
+            applicationStep: "budget",
+
+            updatedAt:
+              new Date().toISOString(),
+          },
+          { merge: true }
+        );
+
+        setApplicationStep("budget");
+      } catch (error) {
+        console.error(
+          "Error saving budget:",
+          error
+        );
+
+        alert(
+          `Firebase error: ${
+            error.code || "unknown"
+          }\n${
+            error.message ||
+            "Unknown error"
+          }`
+        );
+      }
+    };
 
   /* =========================
   CONTINUE TO UNIVERSITY
   ========================= */
 
-  const continueToUniversity = async () => {
-    if (!selectedBudget) {
-      alert(
-        "Please select a budget first."
-      );
-      return;
-    }
+  const continueToUniversity =
+    async () => {
+      if (!selectedBudget) {
+        alert(
+          "Please select a budget first."
+        );
+        return;
+      }
 
-    try {
-      setShowUniversityStep(true);
-      setApplicationStep("university");
+      try {
+        setShowUniversityStep(true);
+        setApplicationStep("university");
 
-      await setDoc(
-        doc(db, "users", user.uid),
-        {
-          selectedField,
-          selectedFieldName,
-          selectedMajor,
-          selectedMajorName,
-          selectedBudget,
-          selectedBudgetName,
-          applicationStep: "university",
-          updatedAt:
-            new Date().toISOString(),
-        },
-        { merge: true }
-      );
+        await setDoc(
+          doc(db, "users", user.uid),
+          {
+            selectedField,
+            selectedFieldName,
 
-      setTimeout(() => {
-        const element =
-          document.getElementById(
-            "university-section"
-          );
+            selectedMajor,
+            selectedMajorName,
 
-        if (element) {
-          element.scrollIntoView({
-            behavior: "smooth",
-            block: "start",
-          });
-        }
-      }, 100);
-    } catch (error) {
-      console.error(
-        "Error moving to university:",
-        error
-      );
+            selectedBudget,
+            selectedBudgetName,
 
-      alert(
-        `Firebase error: ${error.code || "unknown"}\n${error.message || "Unknown error"}`
-      );
-    }
-  };
+            applicationStep: "university",
+
+            updatedAt:
+              new Date().toISOString(),
+          },
+          { merge: true }
+        );
+
+        setTimeout(() => {
+          const element =
+            document.getElementById(
+              "university-section"
+            );
+
+          if (element) {
+            element.scrollIntoView({
+              behavior: "smooth",
+              block: "start",
+            });
+          }
+        }, 100);
+      } catch (error) {
+        console.error(
+          "Error moving to university:",
+          error
+        );
+
+        alert(
+          `Firebase error: ${
+            error.code || "unknown"
+          }\n${
+            error.message ||
+            "Unknown error"
+          }`
+        );
+      }
+    };
 
   /* =========================
   SELECT UNIVERSITY
   ========================= */
 
-  const handleUniversitySelect = async (
-    university
-  ) => {
-    if (!user || !selectedBudget) return;
+  const handleUniversitySelect =
+    async (university) => {
+      if (!user || !selectedBudget)
+        return;
 
-    try {
-      setSelectedUniversity(
-        university.id
-      );
+      try {
+        setSelectedUniversity(
+          university.id
+        );
 
-      setSelectedUniversityName(
-        university.name
-      );
+        setSelectedUniversityName(
+          university.name
+        );
 
-      await setDoc(
-        doc(db, "users", user.uid),
-        {
-          selectedField,
-          selectedFieldName,
-          selectedMajor,
-          selectedMajorName,
-          selectedBudget,
-          selectedBudgetName,
-          selectedUniversity:
-            university.id,
-          selectedUniversityName:
-            university.name,
-          applicationStep: "university",
-          updatedAt:
+        /*
+          Changing the university
+          resets program and documents.
+        */
+
+        setSelectedProgram("");
+        setSelectedProgramName("");
+
+        setDocuments({
+          passport: null,
+          certificate: null,
+          transcript: null,
+        });
+
+        setDocumentUploading("");
+        setDocumentsSaved(false);
+
+        setShowProgramStep(false);
+        setShowDocumentsStep(false);
+
+        await setDoc(
+          doc(db, "users", user.uid),
+          {
+            selectedField,
+            selectedFieldName,
+
+            selectedMajor,
+            selectedMajorName,
+
+            selectedBudget,
+            selectedBudgetName,
+
+            selectedUniversity:
+              university.id,
+
+            selectedUniversityName:
+              university.name,
+
+            selectedProgram: "",
+            selectedProgramName: "",
+
+            documents: {},
+
+            applicationStep: "university",
+
+            updatedAt:
+              new Date().toISOString(),
+          },
+          { merge: true }
+        );
+
+        setApplicationStep("university");
+      } catch (error) {
+        console.error(
+          "Error saving university:",
+          error
+        );
+
+        alert(
+          `Firebase error: ${
+            error.code || "unknown"
+          }\n${
+            error.message ||
+            "Unknown error"
+          }`
+        );
+      }
+    };
+
+  /* =========================
+  CONTINUE TO PROGRAM
+  ========================= */
+
+  const continueToProgram =
+    async () => {
+      if (!selectedUniversity) {
+        alert(
+          "Please select a university first."
+        );
+        return;
+      }
+
+      try {
+        setShowProgramStep(true);
+        setApplicationStep("program");
+
+        await setDoc(
+          doc(db, "users", user.uid),
+          {
+            selectedField,
+            selectedFieldName,
+
+            selectedMajor,
+            selectedMajorName,
+
+            selectedBudget,
+            selectedBudgetName,
+
+            selectedUniversity,
+            selectedUniversityName,
+
+            applicationStep: "program",
+
+            updatedAt:
+              new Date().toISOString(),
+          },
+          { merge: true }
+        );
+
+        setTimeout(() => {
+          const element =
+            document.getElementById(
+              "program-section"
+            );
+
+          if (element) {
+            element.scrollIntoView({
+              behavior: "smooth",
+              block: "start",
+            });
+          }
+        }, 100);
+      } catch (error) {
+        console.error(
+          "Error moving to program:",
+          error
+        );
+
+        alert(
+          `Firebase error: ${
+            error.code || "unknown"
+          }\n${
+            error.message ||
+            "Unknown error"
+          }`
+        );
+      }
+    };
+
+  /* =========================
+  SELECT PROGRAM
+  ========================= */
+
+  const handleProgramSelect =
+    async (program) => {
+      if (!user || !selectedUniversity)
+        return;
+
+      try {
+        setSelectedProgram(program.id);
+        setSelectedProgramName(
+          program.name
+        );
+
+        /*
+          Changing program resets
+          previously uploaded documents.
+        */
+
+        setDocuments({
+          passport: null,
+          certificate: null,
+          transcript: null,
+        });
+
+        setDocumentUploading("");
+        setDocumentsSaved(false);
+        setShowDocumentsStep(false);
+
+        await setDoc(
+          doc(db, "users", user.uid),
+          {
+            selectedField,
+            selectedFieldName,
+
+            selectedMajor,
+            selectedMajorName,
+
+            selectedBudget,
+            selectedBudgetName,
+
+            selectedUniversity,
+            selectedUniversityName,
+
+            selectedProgram: program.id,
+            selectedProgramName: program.name,
+
+            documents: {},
+
+            applicationStep: "program",
+
+            updatedAt:
+              new Date().toISOString(),
+          },
+          { merge: true }
+        );
+
+        setApplicationStep("program");
+      } catch (error) {
+        console.error(
+          "Error saving program:",
+          error
+        );
+
+        alert(
+          `Firebase error: ${
+            error.code || "unknown"
+          }\n${
+            error.message ||
+            "Unknown error"
+          }`
+        );
+      }
+    };
+
+  /* =========================
+  CONTINUE TO DOCUMENTS
+  ========================= */
+
+  const continueToDocuments =
+    async () => {
+      if (!selectedProgram) {
+        alert(
+          "Please select a program first."
+        );
+        return;
+      }
+
+      try {
+        setShowDocumentsStep(true);
+        setApplicationStep("documents");
+
+        await setDoc(
+          doc(db, "users", user.uid),
+          {
+            applicationStep: "documents",
+            updatedAt:
+              new Date().toISOString(),
+          },
+          { merge: true }
+        );
+
+        setTimeout(() => {
+          const element =
+            document.getElementById(
+              "documents-section"
+            );
+
+          if (element) {
+            element.scrollIntoView({
+              behavior: "smooth",
+              block: "start",
+            });
+          }
+        }, 100);
+      } catch (error) {
+        console.error(
+          "Error moving to documents:",
+          error
+        );
+
+        alert(
+          `Firebase error: ${
+            error.code || "unknown"
+          }\n${
+            error.message ||
+            "Unknown error"
+          }`
+        );
+      }
+    };
+
+  /* =========================
+  UPLOAD DOCUMENT
+  ========================= */
+
+  const handleDocumentUpload =
+    async (
+      documentKey,
+      file
+    ) => {
+      if (
+        !user ||
+        !selectedProgram ||
+        !file
+      ) {
+        return;
+      }
+
+      try {
+        setDocumentUploading(
+          documentKey
+        );
+
+        setDocumentsSaved(false);
+
+        const storage =
+          getStorage(auth.app);
+
+        const fileRef = ref(
+          storage,
+          `users/${user.uid}/documents/${documentKey}-${Date.now()}-${file.name}`
+        );
+
+        await uploadBytes(
+          fileRef,
+          file
+        );
+
+        const downloadURL =
+          await getDownloadURL(
+            fileRef
+          );
+
+        const documentData = {
+          name: file.name,
+          url: downloadURL,
+          uploadedAt:
             new Date().toISOString(),
-        },
-        { merge: true }
-      );
+        };
 
-      setApplicationStep("university");
-    } catch (error) {
-      console.error(
-        "Error saving university:",
-        error
-      );
+        const updatedDocuments = {
+          ...documents,
+          [documentKey]:
+            documentData,
+        };
 
-      alert(
-        `Firebase error: ${error.code || "unknown"}\n${error.message || "Unknown error"}`
-      );
-    }
-  };
+        setDocuments(
+          updatedDocuments
+        );
+
+        await setDoc(
+          doc(db, "users", user.uid),
+          {
+            documents:
+              updatedDocuments,
+
+            applicationStep:
+              "documents",
+
+            updatedAt:
+              new Date().toISOString(),
+          },
+          { merge: true }
+        );
+
+        setApplicationStep(
+          "documents"
+        );
+
+        setDocumentsSaved(true);
+      } catch (error) {
+        console.error(
+          "Error uploading document:",
+          error
+        );
+
+        alert(
+          `Document upload error: ${
+            error.code ||
+            "unknown"
+          }\n${
+            error.message ||
+            "Unable to upload document."
+          }`
+        );
+      } finally {
+        setDocumentUploading("");
+      }
+    };
 
   /* =========================
   LOADING
@@ -1234,6 +1842,11 @@ function App() {
   if (user) {
     const availableMajors =
       majorsByField[selectedField] || [];
+
+    const uploadedDocumentsCount =
+      Object.values(documents).filter(
+        Boolean
+      ).length;
 
     return (
       <div
@@ -1344,8 +1957,9 @@ function App() {
               }}
             >
               Choose your field, major,
-              budget and university to
-              continue your application.
+              budget, university and
+              program to continue your
+              application.
             </p>
           </div>
 
@@ -1401,7 +2015,11 @@ function App() {
                       applicationStep ===
                         "budget" ||
                       applicationStep ===
-                        "university");
+                        "university" ||
+                      applicationStep ===
+                        "program" ||
+                      applicationStep ===
+                        "documents");
                 }
 
                 if (step === "Major") {
@@ -1412,7 +2030,11 @@ function App() {
                     applicationStep !==
                       "budget" &&
                     applicationStep !==
-                      "university";
+                      "university" &&
+                    applicationStep !==
+                      "program" &&
+                    applicationStep !==
+                      "documents";
 
                   completed =
                     !!selectedMajor &&
@@ -1420,7 +2042,11 @@ function App() {
                       applicationStep ===
                         "budget" ||
                       applicationStep ===
-                        "university");
+                        "university" ||
+                      applicationStep ===
+                        "program" ||
+                      applicationStep ===
+                        "documents");
                 }
 
                 if (step === "Budget") {
@@ -1433,7 +2059,11 @@ function App() {
                     !!selectedBudget &&
                     (showUniversityStep ||
                       applicationStep ===
-                        "university");
+                        "university" ||
+                      applicationStep ===
+                        "program" ||
+                      applicationStep ===
+                        "documents");
                 }
 
                 if (step === "University") {
@@ -1443,7 +2073,36 @@ function App() {
                       "university";
 
                   completed =
-                    !!selectedUniversity;
+                    !!selectedUniversity &&
+                    (showProgramStep ||
+                      applicationStep ===
+                        "program" ||
+                      applicationStep ===
+                        "documents");
+                }
+
+                if (step === "Program") {
+                  active =
+                    showProgramStep ||
+                    applicationStep ===
+                      "program";
+
+                  completed =
+                    !!selectedProgram &&
+                    (showDocumentsStep ||
+                      applicationStep ===
+                        "documents");
+                }
+
+                if (step === "Documents") {
+                  active =
+                    showDocumentsStep ||
+                    applicationStep ===
+                      "documents";
+
+                  completed =
+                    uploadedDocumentsCount ===
+                    3;
                 }
 
                 return (
@@ -2432,10 +3091,8 @@ function App() {
                     </div>
 
                     <button
-                      onClick={() =>
-                        alert(
-                          "Program step will be added next."
-                        )
+                      onClick={
+                        continueToProgram
                       }
                       style={{
                         marginTop:
@@ -2465,13 +3122,602 @@ function App() {
               </section>
             )}
 
+          {/* PROGRAM SECTION */}
+
+          {showProgramStep &&
+            selectedUniversity && (
+              <section
+                id="program-section"
+                style={{
+                  background: "#fff",
+                  borderRadius:
+                    "22px",
+                  padding: "30px",
+                  marginBottom:
+                    "30px",
+                  boxShadow:
+                    "0 8px 30px rgba(44, 110, 150, 0.07)",
+                  scrollMarginTop:
+                    "90px",
+                }}
+              >
+                <div
+                  style={{
+                    marginBottom:
+                      "25px",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize:
+                        "13px",
+                      color:
+                        "#65b9f5",
+                      fontWeight:
+                        "700",
+                      marginBottom:
+                        "8px",
+                    }}
+                  >
+                    {selectedFieldName}{" "}
+                    •{" "}
+                    {selectedMajorName}{" "}
+                    •{" "}
+                    {selectedUniversityName}
+                  </div>
+
+                  <h2
+                    style={{
+                      margin:
+                        "0 0 8px",
+                      fontSize:
+                        "27px",
+                    }}
+                  >
+                    Choose Your Program
+                  </h2>
+
+                  <p
+                    style={{
+                      margin: 0,
+                      color:
+                        "#71808d",
+                    }}
+                  >
+                    Select the type of study
+                    program you want to
+                    apply for.
+                  </p>
+                </div>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns:
+                      "repeat(auto-fit, minmax(220px, 1fr))",
+                    gap: "15px",
+                  }}
+                >
+                  {programTypes.map(
+                    (program) => {
+                      const selected =
+                        selectedProgram ===
+                        program.id;
+
+                      return (
+                        <button
+                          key={
+                            program.id
+                          }
+                          onClick={() =>
+                            handleProgramSelect(
+                              program
+                            )
+                          }
+                          style={{
+                            textAlign:
+                              "left",
+                            background:
+                              selected
+                                ? "#eaf6ff"
+                                : "#fff",
+                            border:
+                              selected
+                                ? "2px solid #65b9f5"
+                                : "1px solid #e0eaf0",
+                            borderRadius:
+                              "15px",
+                            padding:
+                              "20px",
+                            cursor:
+                              "pointer",
+                            minHeight:
+                              "80px",
+                            display:
+                              "flex",
+                            alignItems:
+                              "center",
+                            justifyContent:
+                              "space-between",
+                            gap:
+                              "12px",
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontSize:
+                                "15px",
+                              fontWeight:
+                                selected
+                                  ? "700"
+                                  : "600",
+                              color:
+                                "#203746",
+                            }}
+                          >
+                            {
+                              program.name
+                            }
+                          </span>
+
+                          {selected && (
+                            <span
+                              style={{
+                                color:
+                                  "#65b9f5",
+                                fontWeight:
+                                  "800",
+                                fontSize:
+                                  "18px",
+                              }}
+                            >
+                              ✓
+                            </span>
+                          )}
+                        </button>
+                      );
+                    }
+                  )}
+                </div>
+
+                {/* SELECTED PROGRAM */}
+
+                {selectedProgram && (
+                  <div
+                    style={{
+                      marginTop:
+                        "25px",
+                      padding:
+                        "20px",
+                      background:
+                        "#f7fcff",
+                      borderRadius:
+                        "15px",
+                      border:
+                        "1px solid #dceffb",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize:
+                          "13px",
+                        color:
+                          "#748592",
+                        marginBottom:
+                          "5px",
+                      }}
+                    >
+                      Selected Program
+                    </div>
+
+                    <div
+                      style={{
+                        fontSize:
+                          "20px",
+                        fontWeight:
+                          "700",
+                        color:
+                          "#1d3444",
+                      }}
+                    >
+                      {
+                        selectedProgramName
+                      }
+                    </div>
+
+                    <div
+                      style={{
+                        marginTop:
+                          "12px",
+                        fontSize:
+                          "13px",
+                        color:
+                          "#65b9f5",
+                        fontWeight:
+                          "600",
+                      }}
+                    >
+                      Program saved
+                      successfully.
+                    </div>
+
+                    <button
+                      onClick={
+                        continueToDocuments
+                      }
+                      style={{
+                        marginTop:
+                          "18px",
+                        border:
+                          "none",
+                        background:
+                          "#65b9f5",
+                        color:
+                          "#fff",
+                        padding:
+                          "13px 22px",
+                        borderRadius:
+                          "10px",
+                        cursor:
+                          "pointer",
+                        fontWeight:
+                          "700",
+                        fontSize:
+                          "14px",
+                      }}
+                    >
+                      Continue to Documents →
+                    </button>
+                  </div>
+                )}
+              </section>
+            )}
+
+          {/* DOCUMENTS SECTION */}
+
+          {showDocumentsStep &&
+            selectedProgram && (
+              <section
+                id="documents-section"
+                style={{
+                  background: "#fff",
+                  borderRadius:
+                    "22px",
+                  padding: "30px",
+                  marginBottom:
+                    "30px",
+                  boxShadow:
+                    "0 8px 30px rgba(44, 110, 150, 0.07)",
+                  scrollMarginTop:
+                    "90px",
+                }}
+              >
+                <div
+                  style={{
+                    marginBottom:
+                      "25px",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize:
+                        "13px",
+                      color:
+                        "#65b9f5",
+                      fontWeight:
+                        "700",
+                      marginBottom:
+                        "8px",
+                    }}
+                  >
+                    {selectedUniversityName}{" "}
+                    •{" "}
+                    {selectedProgramName}
+                  </div>
+
+                  <h2
+                    style={{
+                      margin:
+                        "0 0 8px",
+                      fontSize:
+                        "27px",
+                    }}
+                  >
+                    Upload Your Documents
+                  </h2>
+
+                  <p
+                    style={{
+                      margin: 0,
+                      color:
+                        "#71808d",
+                    }}
+                  >
+                    Upload the required
+                    documents to continue
+                    your application.
+                  </p>
+                </div>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns:
+                      "repeat(auto-fit, minmax(240px, 1fr))",
+                    gap: "15px",
+                  }}
+                >
+                  {[
+                    {
+                      key: "passport",
+                      title:
+                        "Passport / ID",
+                      description:
+                        "Upload a clear copy of your passport or ID.",
+                    },
+                    {
+                      key: "certificate",
+                      title:
+                        "Certificate",
+                      description:
+                        "Upload your diploma or graduation certificate.",
+                    },
+                    {
+                      key: "transcript",
+                      title:
+                        "Transcript",
+                      description:
+                        "Upload your academic transcript.",
+                    },
+                  ].map(
+                    (documentItem) => {
+                      const uploaded =
+                        documents[
+                          documentItem.key
+                        ];
+
+                      const uploading =
+                        documentUploading ===
+                        documentItem.key;
+
+                      return (
+                        <div
+                          key={
+                            documentItem.key
+                          }
+                          style={{
+                            border:
+                              "1px solid #e0eaf0",
+                            borderRadius:
+                              "15px",
+                            padding:
+                              "20px",
+                            background:
+                              "#fff",
+                          }}
+                        >
+                          <div
+                            style={{
+                              fontSize:
+                                "17px",
+                              fontWeight:
+                                "700",
+                              color:
+                                "#203746",
+                              marginBottom:
+                                "8px",
+                            }}
+                          >
+                            {
+                              documentItem.title
+                            }
+                          </div>
+
+                          <p
+                            style={{
+                              margin:
+                                "0 0 15px",
+                              color:
+                                "#71808d",
+                              fontSize:
+                                "13px",
+                              lineHeight:
+                                1.5,
+                            }}
+                          >
+                            {
+                              documentItem.description
+                            }
+                          </p>
+
+                          <input
+                            type="file"
+                            accept=".pdf,.jpg,.jpeg,.png"
+                            disabled={
+                              uploading
+                            }
+                            onChange={(
+                              e
+                            ) => {
+                              const file =
+                                e
+                                  .target
+                                  .files?.[0];
+
+                              if (file) {
+                                handleDocumentUpload(
+                                  documentItem.key,
+                                  file
+                                );
+                              }
+                            }}
+                            style={{
+                              width:
+                                "100%",
+                              fontSize:
+                                "13px",
+                            }}
+                          />
+
+                          {uploading && (
+                            <div
+                              style={{
+                                marginTop:
+                                  "12px",
+                                color:
+                                  "#65b9f5",
+                                fontSize:
+                                  "13px",
+                                fontWeight:
+                                  "600",
+                              }}
+                            >
+                              Uploading...
+                            </div>
+                          )}
+
+                          {uploaded &&
+                            !uploading && (
+                              <div
+                                style={{
+                                  marginTop:
+                                    "12px",
+                                  color:
+                                    "#23844b",
+                                  fontSize:
+                                    "13px",
+                                  fontWeight:
+                                    "600",
+                                }}
+                              >
+                                ✓{" "}
+                                {
+                                  uploaded.name
+                                }
+                              </div>
+                            )}
+                        </div>
+                      );
+                    }
+                  )}
+                </div>
+
+                {documentsSaved && (
+                  <div
+                    style={{
+                      marginTop:
+                        "20px",
+                      padding:
+                        "14px 16px",
+                      background:
+                        "#eefaf3",
+                      borderRadius:
+                        "10px",
+                      color:
+                        "#23844b",
+                      fontSize:
+                        "13px",
+                      fontWeight:
+                        "600",
+                    }}
+                  >
+                    Document uploaded and
+                    saved successfully.
+                  </div>
+                )}
+
+                <div
+                  style={{
+                    marginTop:
+                      "25px",
+                    padding:
+                      "18px",
+                    background:
+                      "#f7fcff",
+                    borderRadius:
+                      "15px",
+                    border:
+                      "1px solid #dceffb",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize:
+                        "13px",
+                      color:
+                        "#71808d",
+                      marginBottom:
+                        "5px",
+                    }}
+                  >
+                    Required Documents
+                  </div>
+
+                  <div
+                    style={{
+                      fontSize:
+                        "15px",
+                      fontWeight:
+                        "700",
+                      color:
+                        "#1d3444",
+                    }}
+                  >
+                    {
+                      uploadedDocumentsCount
+                    }{" "}
+                    / 3 uploaded
+                  </div>
+                </div>
+
+                <button
+                  onClick={() =>
+                    alert(
+                      "Documents step completed. Payment step will be added next."
+                    )
+                  }
+                  style={{
+                    marginTop:
+                      "18px",
+                    border: "none",
+                    background:
+                      uploadedDocumentsCount ===
+                      3
+                        ? "#65b9f5"
+                        : "#b9dff7",
+                    color: "#fff",
+                    padding:
+                      "13px 22px",
+                    borderRadius:
+                      "10px",
+                    cursor:
+                      uploadedDocumentsCount ===
+                      3
+                        ? "pointer"
+                        : "not-allowed",
+                    fontWeight:
+                      "700",
+                    fontSize:
+                      "14px",
+                  }}
+                  disabled={
+                    uploadedDocumentsCount !==
+                    3
+                  }
+                >
+                  Continue to Payment →
+                </button>
+              </section>
+            )}
+
           {/* CURRENT SELECTION SUMMARY */}
 
           {(
             selectedField ||
             selectedMajor ||
             selectedBudget ||
-            selectedUniversity
+            selectedUniversity ||
+            selectedProgram
           ) && (
             <div
               style={{
@@ -2596,6 +3842,30 @@ function App() {
                     <strong>
                       {
                         selectedUniversityName
+                      }
+                    </strong>
+                  </div>
+                )}
+
+                {selectedProgramName && (
+                  <div
+                    style={{
+                      padding:
+                        "10px 15px",
+                      background:
+                        "#eaf6ff",
+                      borderRadius:
+                        "10px",
+                      color:
+                        "#24516d",
+                      fontSize:
+                        "14px",
+                    }}
+                  >
+                    Program:{" "}
+                    <strong>
+                      {
+                        selectedProgramName
                       }
                     </strong>
                   </div>
